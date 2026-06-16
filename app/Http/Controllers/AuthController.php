@@ -3,59 +3,104 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-
-class AuthController extends Controller
-namespace App\Http\Controllers;
-
-use Illuminate\Http\Request;
 use App\Models\User;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+
 
 class AuthController extends Controller
 {
+
+    // Show login page
+    public function showLogin()
+    {
+        return view('login');
+    }
+
+
+    // Login user
     public function login(Request $request)
     {
-        $user = User::where('email', $request->email)->first();
 
-        if ($user && Hash::check($request->password, $user->password)) {
+        $credentials = $request->validate([
+            'email' => 'required|email',
+            'password' => 'required'
+        ]);
 
-            session([
-                'user_id' => $user->id,
-                'user_name' => $user->name
-            ]);
 
-            return redirect('/')->with('success', 'Logged in!');
+        if(Auth::attempt($credentials)){
+
+            $request->session()->regenerate();
+
+            return redirect('/products');
+
         }
 
-        return back()->with('error', 'Invalid credentials');
-    }
-}
-use Illuminate\Support\Facades\Hash;
 
-public function register(Request $request)
-{
-    // validation
-    if ($request->password !== $request->password_confirmation) {
-        return back()->with('error', 'Passwords do not match');
+        return back()->withErrors([
+            'email' => 'Invalid login details'
+        ]);
+
     }
 
-    // check if email exists
-    if (User::where('email', $request->email)->exists()) {
-        return back()->with('error', 'Email already exists');
+
+
+    // Show register page
+    public function showRegister()
+    {
+        return view('register');
     }
 
-    // create user
-    $user = User::create([
-        'name' => $request->name,
-        'email' => $request->email,
-        'password' => Hash::make($request->password),
-    ]);
 
-    // login user automatically
-    session([
-        'user_id' => $user->id,
-        'user_name' => $user->name
-    ]);
 
-    return redirect('/')->with('success', 'Account created!');
+    // Register user
+    public function register(Request $request)
+    {
+
+        $request->validate([
+
+            'name' => 'required',
+
+            'email' => 'required|email|unique:users',
+
+            'password' => 'required|min:6'
+
+        ]);
+
+
+        User::create([
+
+            'name' => $request->name,
+
+            'email' => $request->email,
+
+            'password' => Hash::make($request->password)
+
+        ]);
+
+
+        return redirect('/login')
+            ->with('success','Account created successfully. Please login.');
+
+    }
+
+
+
+    // Logout user
+    public function logout(Request $request)
+    {
+
+        Auth::logout();
+
+
+        $request->session()->invalidate();
+
+
+        $request->session()->regenerateToken();
+
+
+        return redirect('/login');
+
+    }
+
 }

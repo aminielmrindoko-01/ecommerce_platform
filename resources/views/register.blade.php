@@ -27,6 +27,14 @@
         </button>
 
     </form>
+    <p>
+Already have an account?
+
+<a href="/login">
+Login
+</a>
+
+</p>
 
     @if(session('error'))
         <p style="color:red;">{{ session('error') }}</p>

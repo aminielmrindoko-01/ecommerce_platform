@@ -1,32 +1,39 @@
 <?php
-use App\Models\Product;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-
-public function store(Request $request)
-
 
 namespace App\Http\Controllers;
 
+use App\Models\Product;
 use Illuminate\Http\Request;
 
 class ProductController extends Controller
 {
-   
-    $request->validate([
-        'name' => 'required',
-        'price' => 'required',
-        'stock' => 'required'
-    ]);
+    // Show all products (Guest allowed)
+    public function index()
+    {
+        $products = Product::all();
+        return view('products.index', compact('products'));
+    }
 
-    Product::create([
-        'vendor_id' => Auth::user()->vendor->id,
-        'name' => $request->name,
-        'price' => $request->price,
-        'stock' => $request->stock,
-        'description' => $request->description
-    ]);
+    // Show single product
+    public function show($id)
+    {
+        $product = Product::findOrFail($id);
+        return view('products.show', compact('product'));
+    }
 
-    return back()->with('success', 'Product added successfully!');
-} //
+    // Store product (Admin use later)
+    public function store(Request $request)
+    {
+        $request->validate([
+            'name' => 'required',
+            'price' => 'required'
+        ]);
 
+        Product::create([
+            'name' => $request->name,
+            'price' => $request->price
+        ]);
+
+        return redirect()->back()->with('success', 'Product created successfully');
+    }
+}

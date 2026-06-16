@@ -55,9 +55,30 @@ Route::get('/login', function () {
 Route::post('/login', [AuthController::class, 'login']);
 Route::get('/register', function () {
     return view('register');
+Route::post('/logout', [AuthController::class, 'logout'])
+    ->name('logout');
 });
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::get('/categories', function () {
     return view('categories');
+});
+Route::post('/logout', [AuthController::class, 'logout'])
+    ->name('logout');
+Route::middleware('auth')->group(function(){
+
+    Route::get('/profile', function(){
+
+        return view('profile');
+
+    });
+
+
+    Route::get('/checkout', function(){
+
+        return view('checkout');
+
+    });
+
+
 });
