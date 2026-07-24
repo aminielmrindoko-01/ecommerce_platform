@@ -1,11 +1,11 @@
 @extends('layouts.app')
 
-@section('title', 'Cart')
+@section('title', mt('cart.title'))
 
 @section('content')
 <div class="section-head">
     <div>
-        <h1 class="font-display" style="margin:0;">Your cart</h1>
+        <h1 class="font-display" style="margin:0;">{{ mt('cart.title') }}</h1>
         <p>{{ count($cart) }} item(s) · Save for later & coupons supported</p>
     </div>
     <a href="{{ route('products.index') }}" class="btn btn-ghost">Continue shopping</a>
@@ -19,7 +19,7 @@
                 <img src="{{ $item['image'] ?? 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=200&q=80' }}" alt="" width="88" height="88" style="border-radius:10px;object-fit:cover;width:88px;height:88px;">
                 <div>
                     <strong>{{ $item['name'] }}</strong>
-                    <div style="color:var(--color-ink-muted);margin-top:.25rem;">{{ $item['brand'] ?? '' }} · TSh {{ number_format($item['price'], 0) }}</div>
+                    <div style="color:var(--color-ink-muted);margin-top:.25rem;">{{ $item['brand'] ?? '' }} · {{ money($item['price']) }}</div>
                     <div style="display:flex;gap:.45rem;margin-top:.65rem;flex-wrap:wrap;align-items:center;">
                         <form method="POST" action="{{ route('cart.decrease', $id) }}">@csrf<button class="btn btn-ghost" type="submit" style="padding:.35rem .65rem;">−</button></form>
                         <strong>{{ $item['quantity'] }}</strong>
@@ -28,7 +28,7 @@
                         <form method="POST" action="{{ route('cart.remove', $id) }}">@csrf<button class="btn btn-danger" type="submit" style="padding:.35rem .75rem;">Remove</button></form>
                     </div>
                 </div>
-                <div style="font-weight:800;">TSh {{ number_format($item['price'] * $item['quantity'], 0) }}</div>
+                <div style="font-weight:800;">{{ money($item['price'] * $item['quantity']) }}</div>
             </div>
         @endforeach
     </div>
@@ -36,11 +36,11 @@
     <aside class="panel">
         <h2 style="margin-top:0;font-size:1.15rem;">Order summary</h2>
         <div style="display:grid;gap:.55rem;font-size:.95rem;">
-            <div style="display:flex;justify-content:space-between;"><span>Subtotal</span><strong>TSh {{ number_format($subtotal, 0) }}</strong></div>
-            <div style="display:flex;justify-content:space-between;"><span>Discount</span><strong>- TSh {{ number_format($discount, 0) }}</strong></div>
-            <div style="display:flex;justify-content:space-between;"><span>Shipping est.</span><strong>{{ $shipping == 0 ? 'FREE' : 'TSh '.number_format($shipping, 0) }}</strong></div>
-            <div style="display:flex;justify-content:space-between;"><span>VAT (18%)</span><strong>TSh {{ number_format($tax, 0) }}</strong></div>
-            <div style="display:flex;justify-content:space-between;border-top:1px solid var(--color-border);padding-top:.75rem;font-size:1.1rem;"><span>Total</span><strong>TSh {{ number_format($total, 0) }}</strong></div>
+            <div style="display:flex;justify-content:space-between;"><span>Subtotal</span><strong>{{ money($subtotal) }}</strong></div>
+            <div style="display:flex;justify-content:space-between;"><span>Discount</span><strong>- {{ money($discount) }}</strong></div>
+            <div style="display:flex;justify-content:space-between;"><span>Shipping est.</span><strong>{{ $shipping == 0 ? 'FREE' : money($shipping) }}</strong></div>
+            <div style="display:flex;justify-content:space-between;"><span>Tax</span><strong>{{ money($tax) }}</strong></div>
+            <div style="display:flex;justify-content:space-between;border-top:1px solid var(--color-border);padding-top:.75rem;font-size:1.1rem;"><span>Total</span><strong>{{ money($total) }}</strong></div>
         </div>
 
         <form method="POST" action="{{ route('cart.coupon.apply') }}" style="margin-top:1rem;display:flex;gap:.4rem;">
@@ -81,7 +81,7 @@
             <div style="display:flex;justify-content:space-between;gap:1rem;padding:1rem;border-bottom:1px solid var(--color-border);align-items:center;flex-wrap:wrap;">
                 <div>
                     <strong>{{ $item['name'] }}</strong>
-                    <div style="color:var(--color-ink-muted);">TSh {{ number_format($item['price'], 0) }}</div>
+                    <div style="color:var(--color-ink-muted);">{{ money($item['price']) }}</div>
                 </div>
                 <div style="display:flex;gap:.4rem;">
                     <form method="POST" action="{{ route('cart.move', $id) }}">@csrf<button class="btn btn-primary" type="submit">Move to cart</button></form>

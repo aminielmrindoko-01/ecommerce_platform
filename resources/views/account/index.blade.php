@@ -44,7 +44,7 @@
         @forelse($recentOrders as $order)
             <a href="{{ route('account.orders.show', $order) }}" style="display:block;padding:.75rem 0;border-bottom:1px solid var(--color-border);">
                 <strong>{{ $order->order_number ?? '#'.$order->id }}</strong>
-                <div style="color:var(--color-ink-muted);font-size:.9rem;">{{ ucfirst($order->status) }} · TSh {{ number_format($order->total_price, 0) }}</div>
+                <div style="color:var(--color-ink-muted);font-size:.9rem;">{{ ucfirst($order->status) }} · {{ money($order->total_price) }}</div>
             </a>
         @empty
             <p style="color:var(--color-ink-muted);">No orders yet.</p>

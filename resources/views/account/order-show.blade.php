@@ -8,7 +8,7 @@
     <div style="display:grid;gap:.4rem;max-width:420px;margin:1rem 0;">
         <div style="display:flex;justify-content:space-between;"><span>Payment</span><strong>{{ strtoupper(str_replace('_',' ', $order->payment_method ?? 'n/a')) }}</strong></div>
         <div style="display:flex;justify-content:space-between;"><span>Shipping</span><strong>{{ ucfirst($order->shipping_method ?? 'standard') }}</strong></div>
-        <div style="display:flex;justify-content:space-between;"><span>Total</span><strong>TSh {{ number_format($order->total_price, 0) }}</strong></div>
+        <div style="display:flex;justify-content:space-between;"><span>Total</span><strong>{{ money($order->total_price) }}</strong></div>
     </div>
     @if($order->shipping_address)
         <div class="panel" style="background:var(--color-surface);">
@@ -26,7 +26,7 @@
     @foreach($order->items as $item)
         <div style="display:flex;justify-content:space-between;padding:1rem;border-bottom:1px solid var(--color-border);">
             <span>{{ $item->product->name ?? 'Product' }} × {{ $item->quantity }}</span>
-            <strong>TSh {{ number_format($item->price * $item->quantity, 0) }}</strong>
+            <strong>{{ money($item->price * $item->quantity) }}</strong>
         </div>
     @endforeach
 </div>

@@ -11,7 +11,7 @@
             <div style="color:var(--color-ink-muted);font-size:.9rem;">{{ $order->created_at->format('M d, Y') }} · {{ $order->items->count() }} item(s)</div>
         </div>
         <div style="text-align:right;">
-            <strong>TSh {{ number_format($order->total_price, 0) }}</strong>
+            <strong>{{ money($order->total_price) }}</strong>
             <div style="color:var(--color-ink-muted);">{{ ucfirst($order->status) }}</div>
         </div>
     </a>

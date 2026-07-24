@@ -9,7 +9,7 @@
     <p style="color:var(--color-ink-muted);margin:0 0 1.25rem;">Order <strong>{{ $order->order_number ?? '#'.$order->id }}</strong> is confirmed. Complete payment via <strong>{{ strtoupper(str_replace('_', ' ', $order->payment_method ?? 'selected method')) }}</strong>.</p>
     <div style="display:grid;gap:.45rem;text-align:left;max-width:420px;margin:0 auto 1.5rem;font-size:.95rem;">
         <div style="display:flex;justify-content:space-between;"><span>Status</span><strong>{{ ucfirst($order->status) }}</strong></div>
-        <div style="display:flex;justify-content:space-between;"><span>Total</span><strong>TSh {{ number_format($order->total_price, 0) }}</strong></div>
+        <div style="display:flex;justify-content:space-between;"><span>Total</span><strong>{{ money($order->total_price) }}</strong></div>
         <div style="display:flex;justify-content:space-between;"><span>Shipping</span><strong>{{ ucfirst($order->shipping_method ?? 'standard') }}</strong></div>
     </div>
     <div style="display:flex;gap:.5rem;justify-content:center;flex-wrap:wrap;">
@@ -24,7 +24,7 @@
         @foreach($order->items as $item)
             <div style="display:flex;justify-content:space-between;padding:1rem;border-bottom:1px solid var(--color-border);">
                 <span>{{ $item->product->name ?? 'Product' }} × {{ $item->quantity }}</span>
-                <strong>TSh {{ number_format($item->price * $item->quantity, 0) }}</strong>
+                <strong>{{ money($item->price * $item->quantity) }}</strong>
             </div>
         @endforeach
     </div>
