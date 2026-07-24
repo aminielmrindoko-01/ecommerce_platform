@@ -1,3 +1,4 @@
+{{-- Reusable catalog card: media, badges, price, optional cart/wishlist actions --}}
 @props([
     'product',
     'showActions' => true,

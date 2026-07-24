@@ -4,6 +4,14 @@ namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
 
+/**
+ * Application service container bindings and boot hooks.
+ *
+ * Marketplace preference sharing is handled by SetMarketplacePreferences middleware
+ * rather than View composers here.
+ *
+ * @package App\Providers
+ */
 class AppServiceProvider extends ServiceProvider
 {
     /**

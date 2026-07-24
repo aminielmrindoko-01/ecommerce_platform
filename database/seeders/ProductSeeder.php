@@ -7,12 +7,19 @@ use App\Models\Vendor;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
+/**
+ * Legacy product seeder (simpler catalog). Prefer MarketplaceSeeder for full demos.
+ *
+ * Assumes VendorSeeder (or equivalent) has already created named stores.
+ *
+ * @package Database\Seeders
+ */
 class ProductSeeder extends Seeder
 {
     use WithoutModelEvents;
 
     /**
-     * Run the database seeds.
+     * Insert a small set of products keyed by vendor store_name.
      */
     public function run(): void
     {

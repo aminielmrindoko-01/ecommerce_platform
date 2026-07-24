@@ -5,6 +5,7 @@
 @section('content')
 @include('account._nav')
 
+{{-- Account overview: stats, profile form, recent orders --}}
 <div style="display:grid;grid-template-columns:1.2fr .8fr;gap:1.25rem;align-items:start;">
     <section class="panel">
         <h1 class="font-display" style="margin-top:0;">Hello, {{ $user->name }}</h1>

@@ -6,12 +6,17 @@ use App\Models\Vendor;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
+/**
+ * Legacy vendor seeder. Prefer MarketplaceSeeder which seeds vendors + richer catalog.
+ *
+ * @package Database\Seeders
+ */
 class VendorSeeder extends Seeder
 {
     use WithoutModelEvents;
 
     /**
-     * Run the database seeds.
+     * Create a few demo vendor stores.
      */
     public function run(): void
     {

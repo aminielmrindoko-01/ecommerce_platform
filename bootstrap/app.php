@@ -12,6 +12,7 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Apply locale/currency/country view shares on every web request.
         $middleware->web(append: [
             SetMarketplacePreferences::class,
         ]);
