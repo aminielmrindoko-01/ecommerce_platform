@@ -56,21 +56,21 @@ class Marketplace
 
     public static function locale(): string
     {
-        $locale = session('locale', cookie('sana_locale', 'en'));
+        $locale = (string) (session('locale') ?? request()->cookie('sana_locale', 'en'));
 
         return array_key_exists($locale, self::languages()) ? $locale : 'en';
     }
 
     public static function currency(): string
     {
-        $currency = session('currency', cookie('sana_currency', self::BASE_CURRENCY));
+        $currency = (string) (session('currency') ?? request()->cookie('sana_currency', self::BASE_CURRENCY));
 
         return array_key_exists($currency, self::currencies()) ? $currency : self::BASE_CURRENCY;
     }
 
     public static function country(): string
     {
-        $country = session('country', cookie('sana_country', 'TZ'));
+        $country = (string) (session('country') ?? request()->cookie('sana_country', 'TZ'));
 
         return array_key_exists($country, self::countries()) ? $country : 'TZ';
     }
