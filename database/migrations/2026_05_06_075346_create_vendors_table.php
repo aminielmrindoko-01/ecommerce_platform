@@ -10,16 +10,16 @@ return new class extends Migration
      * Run the migrations.
      */
     public function up(): void
-{
-    Schema::create('vendors', function (Blueprint $table) {
-        $table->id();
-        $table->foreignId('user_id')->constrained()->onDelete('cascade');
-        $table->string('store_name');
-        $table->text('description')->nullable();
-        $table->boolean('is_verified')->default(false);
-        $table->timestamps();
-    });
-}
+    {
+        Schema::create('vendors', function (Blueprint $table) {
+            $table->id();
+            $table->string('store_name');
+            $table->string('email')->nullable();
+            $table->text('description')->nullable();
+            $table->boolean('is_verified')->default(false);
+            $table->timestamps();
+        });
+    }
 
     /**
      * Reverse the migrations.

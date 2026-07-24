@@ -5,25 +5,16 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class OrderItem extends Model
+class Wishlist extends Model
 {
     protected $fillable = [
-        'order_id',
+        'user_id',
         'product_id',
-        'quantity',
-        'price',
     ];
 
-    protected function casts(): array
+    public function user(): BelongsTo
     {
-        return [
-            'price' => 'decimal:2',
-        ];
-    }
-
-    public function order(): BelongsTo
-    {
-        return $this->belongsTo(Order::class);
+        return $this->belongsTo(User::class);
     }
 
     public function product(): BelongsTo
