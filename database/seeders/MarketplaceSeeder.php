@@ -11,10 +11,23 @@ use App\Models\Vendor;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Str;
 
+/**
+ * Demo catalog for SANA Market: categories, vendors, products, reviews, Q&A, coupons.
+ *
+ * Destructive: clears existing reviews/questions/products/vendors/categories/coupons
+ * before insert so `db:seed` stays idempotent for local demos. Do not run against
+ * production data without a backup.
+ *
+ * @package Database\Seeders
+ */
 class MarketplaceSeeder extends Seeder
 {
+    /**
+     * Wipe demo marketplace rows and re-seed a curated East-Africa style catalog.
+     */
     public function run(): void
     {
+        // Order matters: child rows before parents when FKs cascade is not enough for truncate-style clears.
         Review::query()->delete();
         ProductQuestion::query()->delete();
         Product::query()->delete();

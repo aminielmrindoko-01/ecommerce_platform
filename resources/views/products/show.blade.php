@@ -36,6 +36,7 @@
 @endpush
 
 @section('content')
+{{-- Product gallery + buy box --}}
 <div class="panel" style="padding:1.5rem;">
     <div style="display:grid;grid-template-columns:1.05fr 1fr;gap:2rem;align-items:start;">
         <div>
@@ -148,6 +149,7 @@
 </section>
 @endif
 
+{{-- Reviews list + submit form --}}
 <section class="section">
     <h2>Customer reviews</h2>
     <div style="display:grid;gap:1rem;grid-template-columns:1fr 1fr;">
@@ -192,6 +194,7 @@
     </div>
 </section>
 
+{{-- Q&A list + ask form --}}
 <section class="section">
     <h2>Questions & answers</h2>
     <div style="display:grid;gap:1rem;grid-template-columns:1fr 1fr;">
@@ -224,6 +227,7 @@
 </section>
 
 @if($fbt->isNotEmpty())
+{{-- Frequently bought together (random in-stock picks from controller) --}}
 <section class="section">
     <h2>Frequently bought together</h2>
     <div class="products-grid">
@@ -234,6 +238,7 @@
 </section>
 @endif
 
+{{-- Same-category related products --}}
 <section class="section">
     <h2>Related products</h2>
     <div class="products-grid">
@@ -243,6 +248,7 @@
     </div>
 </section>
 
+{{-- Hydrated by app.js from localStorage via /api/products/recent --}}
 <section class="section">
     <h2>Recently viewed</h2>
     <div class="products-grid" data-recently-viewed data-exclude-id="{{ $product->id }}"></div>

@@ -5,8 +5,18 @@ namespace Database\Seeders;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 
+/**
+ * Seeds demo admin/customer/vendor accounts, then marketplace catalog data.
+ *
+ * Default password for all demo users: `password` (local/dev only).
+ *
+ * @package Database\Seeders
+ */
 class DatabaseSeeder extends Seeder
 {
+    /**
+     * Upsert known demo users and invoke MarketplaceSeeder.
+     */
     public function run(): void
     {
         User::updateOrCreate(

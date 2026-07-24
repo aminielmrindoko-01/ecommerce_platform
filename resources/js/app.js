@@ -1,3 +1,11 @@
+<?php
+
+/**
+ * Storefront progressive enhancement: hero carousel, flash countdowns,
+ * recently-viewed (localStorage + API), toast auto-dismiss, search typeahead.
+ * Failures on fetch are swallowed so UI never hard-breaks for optional widgets.
+ */
+
 import './bootstrap';
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -8,6 +16,9 @@ document.addEventListener('DOMContentLoaded', () => {
     initSearchSuggest();
 });
 
+/**
+ * Rotate `[data-hero-slide]` panels every 5.5s; dots jump to a specific slide.
+ */
 function initHeroSlider() {
     const root = document.querySelector('[data-hero-slider]');
     if (!root) return;
@@ -27,6 +38,10 @@ function initHeroSlider() {
     setInterval(() => show(index + 1), 5500);
 }
 
+/**
+ * Render HH/MM/SS units into `[data-countdown]` from a ms epoch attribute.
+ * Stops the interval when the countdown reaches zero.
+ */
 function initFlashCountdowns() {
     document.querySelectorAll('[data-countdown]').forEach((el) => {
         const endsAt = Number(el.getAttribute('data-countdown'));
@@ -50,6 +65,10 @@ function initFlashCountdowns() {
     });
 }
 
+/**
+ * Track current product id in localStorage and hydrate `[data-recently-viewed]`
+ * via GET /api/products/recent. Prices shown as TSh (display currency not applied in JS).
+ */
 function initRecentlyViewed() {
     const key = 'sana_recently_viewed';
     const current = document.body.dataset.productId;
@@ -96,6 +115,9 @@ function initRecentlyViewed() {
         .catch(() => {});
 }
 
+/**
+ * Auto-hide flash toasts after ~4.5s with a short fade-out.
+ */
 function initToastDismiss() {
     document.querySelectorAll('[data-toast]').forEach((el) => {
         setTimeout(() => {
@@ -106,6 +128,10 @@ function initToastDismiss() {
     });
 }
 
+/**
+ * Debounced typeahead against /api/search/suggest (220ms). Hides panel on outside click.
+ * Requires `[data-search-input]` + `[data-search-suggest]` in the layout.
+ */
 function initSearchSuggest() {
     const input = document.querySelector('[data-search-input]');
     const box = document.querySelector('[data-search-suggest]');

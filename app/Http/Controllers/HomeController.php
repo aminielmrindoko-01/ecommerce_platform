@@ -1,5 +1,13 @@
 <?php
 
+/**
+ * |--------------------------------------------------------------------------
+ * | Storefront home merchandising
+ * |--------------------------------------------------------------------------
+ * | Composes homepage carousels from product scopes (featured, flash, new,
+ * | best sellers, trending). Eager-loads relations used by product cards.
+ */
+
 namespace App\Http\Controllers;
 
 use App\Models\Category;
@@ -7,8 +15,16 @@ use App\Models\Product;
 use App\Models\Vendor;
 use Illuminate\View\View;
 
+/**
+ * Homepage data aggregation for the SANA Market landing experience.
+ *
+ * @package App\Http\Controllers
+ */
 class HomeController extends Controller
 {
+    /**
+     * Load merchandising rails and flash-sale countdown timestamp (ms epoch for JS).
+     */
     public function index(): View
     {
         $categories = Category::orderBy('sort_order')->get();
@@ -55,6 +71,7 @@ class HomeController extends Controller
             ->take(6)
             ->get();
 
+        // Fallback countdown keeps UI alive when no flash_ends_at is set on products.
         $flashEndsAt = optional($flashSales->first()?->flash_ends_at)->getTimestamp() * 1000
             ?: now()->addHours(18)->getTimestamp() * 1000;
 

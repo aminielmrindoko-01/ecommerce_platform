@@ -1,13 +1,31 @@
 <?php
 
+/**
+ * |--------------------------------------------------------------------------
+ * | SEO artifacts
+ * |--------------------------------------------------------------------------
+ * | Dynamic sitemap.xml (capped product sample) and robots.txt that
+ * | disallows private admin/account/checkout/cart paths.
+ */
+
 namespace App\Http\Controllers;
 
 use App\Models\Category;
 use App\Models\Product;
 use Illuminate\Http\Response;
 
+/**
+ * Search-engine facing XML/plain responses.
+ *
+ * @package App\Http\Controllers
+ */
 class SeoController extends Controller
 {
+    /**
+     * Build sitemap entries for core routes, categories, and up to 500 latest products.
+     *
+     * Product cap avoids unbounded response size as the catalog grows.
+     */
     public function sitemap(): Response
     {
         $urls = [
@@ -43,6 +61,9 @@ class SeoController extends Controller
         return response($xml, 200)->header('Content-Type', 'application/xml');
     }
 
+    /**
+     * robots.txt allowing public storefront crawl while blocking private flows.
+     */
     public function robots(): Response
     {
         $sitemap = url('/sitemap.xml');

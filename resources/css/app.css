@@ -5,6 +5,7 @@
 @source '../**/*.blade.php';
 @source '../**/*.js';
 
+/* === Design tokens === */
 /* SANA Market design tokens — teal + amber marketplace (not purple / cream-terracotta) */
 @theme {
     --font-sans: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
@@ -70,6 +71,7 @@
     --text-3xl: 2.25rem;
 }
 
+/* === Base === */
 @layer base {
     html {
         scroll-behavior: smooth;
@@ -106,6 +108,7 @@
     }
 }
 
+/* === Layout shell & chrome === */
 @layer components {
     .site-shell {
         min-height: 100vh;
@@ -264,6 +267,7 @@
         padding-inline: 0.25rem;
     }
 
+    /* === Buttons & alerts === */
     .btn {
         display: inline-flex;
         align-items: center;
@@ -345,6 +349,7 @@
         border-color: #f5c2bc;
     }
 
+    /* === Sections & product cards === */
     .section {
         margin-bottom: 2.75rem;
     }
@@ -374,6 +379,7 @@
         gap: 1.15rem;
     }
 
+    /* === Product cards & grids === */
     .product-card {
         background: var(--color-card);
         border: 1px solid var(--color-border);
@@ -486,6 +492,7 @@
         font-weight: 650;
     }
 
+    /* === Forms & panels === */
     .panel {
         background: var(--color-card);
         border: 1px solid var(--color-border);
@@ -534,6 +541,7 @@
         border-radius: 0.5rem;
     }
 
+    /* === Trust strip & footer === */
     .trust-strip {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -629,6 +637,7 @@
         background: var(--color-brand-soft);
     }
 
+    /* === A11y skip link === */
     .skip-link {
         position: absolute;
         left: -999px;
@@ -715,6 +724,7 @@
         display: none;
     }
 
+    /* === Checkout payment options === */
     .payment-option {
         display: flex;
         align-items: center;
@@ -741,6 +751,7 @@
         box-shadow: var(--shadow-soft);
     }
 
+    /* === Home hero slider === */
     .hero-slider {
         position: relative;
         border-radius: calc(var(--radius-lg) + 4px);
@@ -822,6 +833,7 @@
         width: 1.35rem;
     }
 
+    /* === Flash sale countdown === */
     .flash-timer {
         display: inline-flex;
         gap: 0.4rem;
@@ -900,6 +912,7 @@
         color: white;
     }
 
+    /* === Admin dashboard stats === */
     .admin-stat {
         background: white;
         border: 1px solid var(--color-border);

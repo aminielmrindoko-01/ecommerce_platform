@@ -1,35 +1,70 @@
 <?php
 
+/**
+ * |--------------------------------------------------------------------------
+ * | Session shopping cart
+ * |--------------------------------------------------------------------------
+ * | Cart and "saved for later" live in session (guest-friendly). Totals use
+ * | TZS catalog prices; tax follows Marketplace::taxRate() for ship-to country.
+ * | Free standard shipping threshold: TZS 150,000.
+ */
+
 namespace App\Http\Controllers;
 
 use App\Models\Coupon;
 use App\Models\Product;
 use App\Support\Marketplace;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\View\View;
 
+/**
+ * Manages session cart lines, coupons, and save-for-later lists.
+ *
+ * @package App\Http\Controllers
+ */
 class CartController extends Controller
 {
+    /**
+     * @return array<int|string, array{name: string, price: float, quantity: int, image: mixed, brand: mixed}>
+     */
     protected function getCart(): array
     {
         return session()->get('cart', []);
     }
 
+    /**
+     * Persist the cart array to the session.
+     *
+     * @param  array<int|string, mixed>  $cart
+     */
     protected function setCart(array $cart): void
     {
         session()->put('cart', $cart);
     }
 
+    /**
+     * @return array<int|string, mixed>
+     */
     protected function getSaved(): array
     {
         return session()->get('saved_for_later', []);
     }
 
+    /**
+     * @param  array<int|string, mixed>  $items
+     */
     protected function setSaved(array $items): void
     {
         session()->put('saved_for_later', $items);
     }
 
-    public function add(Request $request, $id)
+    /**
+     * Add a product to the cart, clamping quantity to available stock.
+     *
+     * @param  int|string  $id  Product primary key
+     */
+    public function add(Request $request, $id): RedirectResponse
     {
         $product = Product::findOrFail($id);
 
@@ -48,6 +83,7 @@ class CartController extends Controller
             'brand' => $product->brand,
         ];
 
+        // Never allow session qty above live stock (stock can change between requests).
         if ($cart[$id]['quantity'] > $product->stock) {
             $cart[$id]['quantity'] = $product->stock;
         }
@@ -57,7 +93,10 @@ class CartController extends Controller
         return redirect()->route('cart.index')->with('success', 'Added to cart.');
     }
 
-    public function index()
+    /**
+     * Render cart with subtotal, coupon discount, shipping, country tax, and total.
+     */
+    public function index(): View
     {
         $cart = $this->getCart();
         $saved = $this->getSaved();
@@ -66,6 +105,7 @@ class CartController extends Controller
 
         $subtotal = collect($cart)->sum(fn ($item) => $item['price'] * $item['quantity']);
         $discount = $coupon ? $coupon->discountFor($subtotal) : 0;
+        // Business rule: free shipping at/above TZS 150k; flat 8k otherwise (empty cart = 0).
         $shipping = $subtotal >= 150000 || $subtotal === 0.0 ? 0 : 8000;
         $tax = round(($subtotal - $discount) * Marketplace::taxRate(), 2);
         $total = max(0, $subtotal - $discount + $shipping + $tax);
@@ -73,7 +113,12 @@ class CartController extends Controller
         return view('cart', compact('cart', 'saved', 'subtotal', 'discount', 'shipping', 'tax', 'total', 'couponCode'));
     }
 
-    public function remove($id)
+    /**
+     * Remove a line from the cart by product id.
+     *
+     * @param  int|string  $id
+     */
+    public function remove($id): RedirectResponse
     {
         $cart = $this->getCart();
         unset($cart[$id]);
@@ -82,7 +127,12 @@ class CartController extends Controller
         return redirect()->route('cart.index')->with('success', 'Item removed.');
     }
 
-    public function increase($id)
+    /**
+     * Increment quantity by one, capped at product stock (or 99 if product missing).
+     *
+     * @param  int|string  $id
+     */
+    public function increase($id): RedirectResponse
     {
         $cart = $this->getCart();
         $product = Product::find($id);
@@ -98,7 +148,12 @@ class CartController extends Controller
         return redirect()->route('cart.index');
     }
 
-    public function decrease($id)
+    /**
+     * Decrement quantity; remove the line when quantity reaches zero.
+     *
+     * @param  int|string  $id
+     */
+    public function decrease($id): RedirectResponse
     {
         $cart = $this->getCart();
 
@@ -113,7 +168,12 @@ class CartController extends Controller
         return redirect()->route('cart.index');
     }
 
-    public function applyCoupon(Request $request)
+    /**
+     * Validate and store an active coupon code on the session.
+     *
+     * Coupon codes are normalized to uppercase; validity includes min order and expiry.
+     */
+    public function applyCoupon(Request $request): RedirectResponse
     {
         $data = $request->validate([
             'code' => 'required|string|max:40',
@@ -132,14 +192,22 @@ class CartController extends Controller
         return back()->with('success', 'Coupon applied: '.$coupon->code);
     }
 
-    public function removeCoupon()
+    /**
+     * Clear the session coupon without touching cart lines.
+     */
+    public function removeCoupon(): RedirectResponse
     {
         session()->forget('coupon_code');
 
         return back()->with('success', 'Coupon removed.');
     }
 
-    public function saveForLater($id)
+    /**
+     * Move a cart line into the saved-for-later session bag.
+     *
+     * @param  int|string  $id
+     */
+    public function saveForLater($id): RedirectResponse
     {
         $cart = $this->getCart();
         $saved = $this->getSaved();
@@ -154,7 +222,12 @@ class CartController extends Controller
         return back()->with('success', 'Saved for later.');
     }
 
-    public function moveToCart($id)
+    /**
+     * Move a saved-for-later line back into the active cart.
+     *
+     * @param  int|string  $id
+     */
+    public function moveToCart($id): RedirectResponse
     {
         $cart = $this->getCart();
         $saved = $this->getSaved();

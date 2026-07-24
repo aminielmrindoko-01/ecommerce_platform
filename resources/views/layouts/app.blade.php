@@ -51,6 +51,7 @@
 <body class="site-shell" data-currency="{{ $mpCurrency ?? 'TZS' }}" data-locale="{{ $mpLocale ?? 'en' }}" @isset($product) data-product-id="{{ $product->id }}" @endisset>
     <a class="skip-link" href="#main">Skip to content</a>
 
+    {{-- Topbar: trust copy + locale/currency/country preferences --}}
     <div class="topbar" role="note">
         <div class="topbar-inner">
             <span>{{ mt('topbar.trust') }}</span>
@@ -86,6 +87,7 @@
         </div>
     </div>
 
+    {{-- Primary nav: brand, typeahead search, account/cart actions --}}
     <header class="navbar">
         <div class="navbar-inner">
             <a href="{{ route('home') }}" class="brand" aria-label="SANA Market home">
@@ -126,6 +128,7 @@
         </div>
     </header>
 
+    {{-- Page content + session flash toasts --}}
     <main class="site-main" id="main">
         @if(session('success'))
             <div class="alert alert-success" role="status" data-toast>{{ session('success') }}</div>
@@ -136,6 +139,7 @@
         @yield('content')
     </main>
 
+    {{-- Site footer: shop links, help, trust, newsletter --}}
     <footer class="site-footer">
         <div class="footer-grid">
             <div>

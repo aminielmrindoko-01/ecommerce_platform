@@ -4,6 +4,7 @@
 @section('meta_description', 'Shop phones, fashion, home & beauty from verified sellers across East Africa.')
 
 @section('content')
+{{-- Hero carousel (driven by data-hero-slider in app.js) --}}
 <section class="hero-slider section" data-hero-slider aria-roledescription="carousel" aria-label="Featured promotions">
     @php
         $slides = [
@@ -50,6 +51,7 @@
     </div>
 </section>
 
+{{-- Trust signals strip --}}
 <section class="section trust-strip" aria-label="Trust signals">
     <div class="trust-item"><strong>Secure pay</strong><span style="color:var(--color-ink-muted);font-size:.9rem;">Cards, M-Pesa & COD</span></div>
     <div class="trust-item"><strong>Fast delivery</strong><span style="color:var(--color-ink-muted);font-size:.9rem;">1–5 days nationwide</span></div>
@@ -57,6 +59,7 @@
     <div class="trust-item"><strong>Verified sellers</strong><span style="color:var(--color-ink-muted);font-size:.9rem;">Quality you can trust</span></div>
 </section>
 
+{{-- Category rail --}}
 <section class="section">
     <div class="section-head">
         <div>
@@ -78,6 +81,7 @@
 </section>
 
 @if($flashSales->isNotEmpty())
+{{-- Flash sales with countdown --}}
 <section class="section">
     <div class="section-head">
         <div>
@@ -94,6 +98,7 @@
 </section>
 @endif
 
+{{-- Featured merchandising rail --}}
 <section class="section">
     <div class="section-head">
         <div>

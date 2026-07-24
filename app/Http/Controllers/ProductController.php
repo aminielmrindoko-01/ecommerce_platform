@@ -1,5 +1,13 @@
 <?php
 
+/**
+ * |--------------------------------------------------------------------------
+ * | Catalog browsing & seller product CRUD
+ * |--------------------------------------------------------------------------
+ * | Public index/show with filters; authenticated create/update/destroy.
+ * | Reviews recalculate denormalized rating_avg / rating_count on the product.
+ */
+
 namespace App\Http\Controllers;
 
 use App\Http\Requests\ProductRequest;
@@ -8,13 +16,26 @@ use App\Models\Product;
 use App\Models\ProductQuestion;
 use App\Models\Review;
 use App\Models\Vendor;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\View\View;
 
+/**
+ * Product listing, detail, CRUD, reviews, and Q&A.
+ *
+ * @package App\Http\Controllers
+ */
 class ProductController extends Controller
 {
-    public function index(Request $request)
+    /**
+     * Filtered/paginated catalog. Eager-loads vendor + category to avoid N+1 in cards.
+     *
+     * Query params: q, category (slug), brand, min_price, max_price, rating, in_stock, sort.
+     * Successful searches are remembered in session (`recent_searches`, max 8).
+     */
+    public function index(Request $request): View
     {
         $query = Product::with(['vendor', 'category']);
 
@@ -82,7 +103,12 @@ class ProductController extends Controller
         ));
     }
 
-    public function show($id)
+    /**
+     * Product detail with related (same category) and frequently-bought-together picks.
+     *
+     * @param  int|string  $id
+     */
+    public function show($id): View
     {
         $product = Product::with(['vendor', 'category', 'reviews' => fn ($q) => $q->latest()->take(10), 'questions'])
             ->findOrFail($id);
@@ -93,6 +119,7 @@ class ProductController extends Controller
             ->take(4)
             ->get();
 
+        // FBT is currently random in-stock products (not co-purchase analytics).
         $fbt = Product::with(['vendor', 'category'])
             ->where('id', '!=', $product->id)
             ->inStock()
@@ -103,7 +130,10 @@ class ProductController extends Controller
         return view('products.show', compact('product', 'related', 'fbt'));
     }
 
-    public function create()
+    /**
+     * Create-product form (auth required at route).
+     */
+    public function create(): View
     {
         $vendors = Vendor::orderBy('store_name')->get();
         $categories = Category::orderBy('name')->get();
@@ -111,7 +141,10 @@ class ProductController extends Controller
         return view('products.create', compact('vendors', 'categories'));
     }
 
-    public function store(ProductRequest $request)
+    /**
+     * Persist a new product; optional image stored on the public disk under products/.
+     */
+    public function store(ProductRequest $request): RedirectResponse
     {
         $data = $request->only(['vendor_id', 'category_id', 'name', 'brand', 'price', 'stock', 'description']);
         $data['slug'] = Str::slug($request->name).'-'.Str::random(5);
@@ -126,7 +159,12 @@ class ProductController extends Controller
         return redirect()->route('products.index')->with('success', 'Product created successfully');
     }
 
-    public function edit($id)
+    /**
+     * Edit form for an existing product.
+     *
+     * @param  int|string  $id
+     */
+    public function edit($id): View
     {
         $product = Product::findOrFail($id);
         $vendors = Vendor::orderBy('store_name')->get();
@@ -135,7 +173,14 @@ class ProductController extends Controller
         return view('products.edit', compact('product', 'vendors', 'categories'));
     }
 
-    public function update(ProductRequest $request, $id)
+    /**
+     * Update product fields; replace uploaded image and delete prior local file if any.
+     *
+     * Remote http(s) image URLs are not deleted from storage on replace.
+     *
+     * @param  int|string  $id
+     */
+    public function update(ProductRequest $request, $id): RedirectResponse
     {
         $product = Product::findOrFail($id);
 
@@ -153,7 +198,12 @@ class ProductController extends Controller
         return redirect()->route('products.show', $product->id)->with('success', 'Product updated successfully');
     }
 
-    public function destroy($id)
+    /**
+     * Soft-delete is not used — product row is removed.
+     *
+     * @param  int|string  $id
+     */
+    public function destroy($id): RedirectResponse
     {
         $product = Product::findOrFail($id);
         $product->delete();
@@ -161,7 +211,14 @@ class ProductController extends Controller
         return redirect()->route('products.index')->with('success', 'Product deleted.');
     }
 
-    public function storeReview(Request $request, $id)
+    /**
+     * Store a review and refresh denormalized rating aggregates on the product.
+     *
+     * Guests may review (user_id nullable); author_name falls back to Guest.
+     *
+     * @param  int|string  $id
+     */
+    public function storeReview(Request $request, $id): RedirectResponse
     {
         $product = Product::findOrFail($id);
 
@@ -188,7 +245,12 @@ class ProductController extends Controller
         return back()->with('success', 'Thanks for your review!');
     }
 
-    public function storeQuestion(Request $request, $id)
+    /**
+     * Store a product question (answer left null for seller/admin follow-up).
+     *
+     * @param  int|string  $id
+     */
+    public function storeQuestion(Request $request, $id): RedirectResponse
     {
         $product = Product::findOrFail($id);
 

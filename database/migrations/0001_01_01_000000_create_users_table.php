@@ -1,5 +1,10 @@
 <?php
 
+/**
+ * Users + Laravel session/password-reset tables.
+ * `role` enum (admin|vendor|customer) drives AdminMiddleware and auth redirects.
+ */
+
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -7,17 +12,18 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Run the migrations.
+     * Create users, password reset tokens, and sessions.
      */
     public function up(): void
     {
         Schema::create('users', function (Blueprint $table) {
-           $table->id();
-$table->string('name');
-$table->string('email')->unique();
-$table->string('password');
-$table->enum('role', ['admin', 'vendor', 'customer'])->default('customer');
-$table->timestamps();
+            $table->id();
+            $table->string('name');
+            $table->string('email')->unique();
+            $table->string('password');
+            // Marketplace authorization role (not Spatie permissions).
+            $table->enum('role', ['admin', 'vendor', 'customer'])->default('customer');
+            $table->timestamps();
         });
 
         Schema::create('password_reset_tokens', function (Blueprint $table) {
@@ -37,7 +43,7 @@ $table->timestamps();
     }
 
     /**
-     * Reverse the migrations.
+     * Drop auth-related tables.
      */
     public function down(): void
     {

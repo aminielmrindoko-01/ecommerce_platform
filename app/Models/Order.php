@@ -6,6 +6,14 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * Buyer order header: totals, status lifecycle, payment/shipping snapshot.
+ *
+ * `shipping_address` is JSON so historical addresses survive address-book edits.
+ * Status enum values: pending, paid, shipped, completed.
+ *
+ * @package App\Models
+ */
 class Order extends Model
 {
     protected $fillable = [
@@ -22,6 +30,9 @@ class Order extends Model
         'shipping_address',
     ];
 
+    /**
+     * @return array<string, string>
+     */
     protected function casts(): array
     {
         return [
@@ -43,6 +54,11 @@ class Order extends Model
         return $this->hasMany(OrderItem::class);
     }
 
+    /**
+     * Alias for Blade/templates that expect `$order->total`.
+     *
+     * @return mixed
+     */
     public function getTotalAttribute()
     {
         return $this->total_price;

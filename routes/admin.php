@@ -1,5 +1,12 @@
 <?php
 
+/**
+ * Admin console routes under /admin.
+ *
+ * Auth is required here; AdminController also applies AdminMiddleware so
+ * non-admin authenticated users receive 403 on every action.
+ */
+
 use App\Http\Controllers\AdminController;
 use Illuminate\Support\Facades\Route;
 

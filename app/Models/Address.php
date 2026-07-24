@@ -5,6 +5,13 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * Saved shipping address for a buyer (account + checkout save-address).
+ *
+ * Only one address should be `is_default` per user (enforced in controllers).
+ *
+ * @package App\Models
+ */
 class Address extends Model
 {
     protected $fillable = [
@@ -21,6 +28,9 @@ class Address extends Model
         'is_default',
     ];
 
+    /**
+     * @return array<string, string>
+     */
     protected function casts(): array
     {
         return [

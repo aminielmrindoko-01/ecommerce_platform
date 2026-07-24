@@ -1,17 +1,35 @@
 <?php
 
+/**
+ * |--------------------------------------------------------------------------
+ * | Buyer account area
+ * |--------------------------------------------------------------------------
+ * | Auth-only profile, orders, addresses, security, notifications stub,
+ * | and wishlist. Ownership checks use abort_unless on bound models.
+ */
+
 namespace App\Http\Controllers;
 
 use App\Models\Address;
 use App\Models\Order;
 use App\Models\Wishlist;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\View\View;
 
+/**
+ * Authenticated customer account pages and mutations.
+ *
+ * @package App\Http\Controllers
+ */
 class AccountController extends Controller
 {
-    public function index()
+    /**
+     * Account overview with counts and recent orders.
+     */
+    public function index(): View
     {
         $user = auth()->user()->loadCount(['orders', 'wishlists', 'addresses']);
         $recentOrders = Order::where('user_id', $user->id)->latest()->take(5)->get();
@@ -19,7 +37,10 @@ class AccountController extends Controller
         return view('account.index', compact('user', 'recentOrders'));
     }
 
-    public function orders()
+    /**
+     * Paginated order history with line items + products (eager-loaded).
+     */
+    public function orders(): View
     {
         $orders = Order::with('items.product')
             ->where('user_id', auth()->id())
@@ -29,7 +50,10 @@ class AccountController extends Controller
         return view('account.orders', compact('orders'));
     }
 
-    public function showOrder(Order $order)
+    /**
+     * Single order detail — owner only.
+     */
+    public function showOrder(Order $order): View
     {
         abort_unless($order->user_id === auth()->id(), 403);
         $order->load('items.product');
@@ -37,14 +61,22 @@ class AccountController extends Controller
         return view('account.order-show', compact('order'));
     }
 
-    public function addresses()
+    /**
+     * Address book for the current user.
+     */
+    public function addresses(): View
     {
         $addresses = Address::where('user_id', auth()->id())->latest()->get();
 
         return view('account.addresses', compact('addresses'));
     }
 
-    public function storeAddress(Request $request)
+    /**
+     * Create an address; clearing other defaults when is_default is set.
+     *
+     * Country is currently hardcoded to Tanzania to match checkout persistence.
+     */
+    public function storeAddress(Request $request): RedirectResponse
     {
         $data = $request->validate([
             'label' => 'required|string|max:40',
@@ -72,7 +104,10 @@ class AccountController extends Controller
         return back()->with('success', 'Address saved.');
     }
 
-    public function destroyAddress(Address $address)
+    /**
+     * Delete an owned address only.
+     */
+    public function destroyAddress(Address $address): RedirectResponse
     {
         abort_unless($address->user_id === auth()->id(), 403);
         $address->delete();
@@ -80,12 +115,18 @@ class AccountController extends Controller
         return back()->with('success', 'Address removed.');
     }
 
-    public function security()
+    /**
+     * Password change form.
+     */
+    public function security(): View
     {
         return view('account.security');
     }
 
-    public function updateProfile(Request $request)
+    /**
+     * Update profile fields; avatar uploads go to public disk `avatars/`.
+     */
+    public function updateProfile(Request $request): RedirectResponse
     {
         $user = auth()->user();
 
@@ -108,7 +149,12 @@ class AccountController extends Controller
         return back()->with('success', 'Profile updated.');
     }
 
-    public function updatePassword(Request $request)
+    /**
+     * Change password after verifying the current password hash.
+     *
+     * New password is hashed via the User model's `hashed` cast.
+     */
+    public function updatePassword(Request $request): RedirectResponse
     {
         $data = $request->validate([
             'current_password' => 'required',
@@ -126,7 +172,10 @@ class AccountController extends Controller
         return back()->with('success', 'Password updated.');
     }
 
-    public function notifications()
+    /**
+     * Static notification placeholders (no notification store yet).
+     */
+    public function notifications(): View
     {
         $notifications = [
             ['title' => 'Welcome to SANA Market', 'body' => 'Explore deals from verified sellers today.', 'time' => 'Just now'],
@@ -136,7 +185,10 @@ class AccountController extends Controller
         return view('account.notifications', compact('notifications'));
     }
 
-    public function wishlist()
+    /**
+     * Wishlist products for the signed-in user.
+     */
+    public function wishlist(): View
     {
         $items = Wishlist::with('product.vendor')
             ->where('user_id', auth()->id())

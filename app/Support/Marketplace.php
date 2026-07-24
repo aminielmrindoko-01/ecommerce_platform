@@ -1,12 +1,34 @@
 <?php
 
+/**
+ * |--------------------------------------------------------------------------
+ * | Marketplace preferences & localization
+ * |--------------------------------------------------------------------------
+ * | Central registry for locale, currency display conversion, country tax,
+ * | and shipping region metadata. Session values win over cookies; both are
+ * | validated against allow-lists so unknown codes fall back safely.
+ */
+
 namespace App\Support;
 
+/**
+ * Static helpers for SANA Market multi-region UX.
+ *
+ * Catalog prices are stored and calculated in TZS. Display currencies use
+ * approximate fixed rates (not live FX) so UI formatting stays deterministic.
+ *
+ * @package App\Support
+ */
 class Marketplace
 {
     /** Base catalog currency is TZS (Tanzanian Shilling). */
     public const BASE_CURRENCY = 'TZS';
 
+    /**
+     * Supported UI languages keyed by ISO-ish locale codes stored in session/cookie.
+     *
+     * @return array<string, array{label: string, native: string}>
+     */
     public static function languages(): array
     {
         return [
@@ -16,6 +38,13 @@ class Marketplace
         ];
     }
 
+    /**
+     * Display currencies and conversion metadata relative to BASE_CURRENCY.
+     *
+     * Rates are approximate display multipliers only — order totals remain TZS.
+     *
+     * @return array<string, array{symbol: string, rate: float, decimals: int, label: string}>
+     */
     public static function currencies(): array
     {
         // Approximate display rates vs TZS for UI conversion (not live FX).
@@ -29,6 +58,13 @@ class Marketplace
         ];
     }
 
+    /**
+     * Ship-to countries with VAT/tax rate and shipping region bucket.
+     *
+     * Tax rate drives cart/checkout tax line; shipping key maps to shippingRegions().
+     *
+     * @return array<string, array{name: string, phone: string, timezone: string, tax: float, shipping: string}>
+     */
     public static function countries(): array
     {
         return [
@@ -44,6 +80,11 @@ class Marketplace
         ];
     }
 
+    /**
+     * Human-readable shipping ETA copy keyed by country shipping bucket.
+     *
+     * @return array<string, string>
+     */
     public static function shippingRegions(): array
     {
         return [
@@ -54,6 +95,9 @@ class Marketplace
         ];
     }
 
+    /**
+     * Active UI locale from session, then cookie, then English default.
+     */
     public static function locale(): string
     {
         $locale = (string) (session('locale') ?? request()->cookie('sana_locale', 'en'));
@@ -61,6 +105,9 @@ class Marketplace
         return array_key_exists($locale, self::languages()) ? $locale : 'en';
     }
 
+    /**
+     * Active display currency code (allow-listed).
+     */
     public static function currency(): string
     {
         $currency = (string) (session('currency') ?? request()->cookie('sana_currency', self::BASE_CURRENCY));
@@ -68,6 +115,9 @@ class Marketplace
         return array_key_exists($currency, self::currencies()) ? $currency : self::BASE_CURRENCY;
     }
 
+    /**
+     * Active ship-to country code (defaults to Tanzania).
+     */
     public static function country(): string
     {
         $country = (string) (session('country') ?? request()->cookie('sana_country', 'TZ'));
@@ -75,16 +125,27 @@ class Marketplace
         return array_key_exists($country, self::countries()) ? $country : 'TZ';
     }
 
+    /**
+     * PHP timezone for the active country (used by preference middleware).
+     */
     public static function timezone(): string
     {
         return self::countries()[self::country()]['timezone'] ?? 'Africa/Dar_es_Salaam';
     }
 
+    /**
+     * Country VAT/sales tax rate applied to (subtotal − discount) at cart/checkout.
+     */
     public static function taxRate(): float
     {
         return (float) (self::countries()[self::country()]['tax'] ?? 0.18);
     }
 
+    /**
+     * Format a TZS catalog amount in the visitor's display currency.
+     *
+     * @param  float|int|string|null  $amountTzs  Amount in base catalog currency
+     */
     public static function money(float|int|string|null $amountTzs): string
     {
         $amount = (float) ($amountTzs ?? 0);
@@ -95,6 +156,12 @@ class Marketplace
         return $meta['symbol'].' '.number_format($converted, $meta['decimals']);
     }
 
+    /**
+     * Resolve a marketplace UI string for the active locale (falls back to English / key).
+     *
+     * @param  string  $key  Dot-key such as nav.cart
+     * @param  string|null  $fallback  Optional override when key is missing
+     */
     public static function t(string $key, ?string $fallback = null): string
     {
         $dict = self::dictionary(self::locale());
@@ -102,6 +169,13 @@ class Marketplace
         return $dict[$key] ?? ($fallback ?? $key);
     }
 
+    /**
+     * Lightweight in-code translation dictionary (not Laravel lang files).
+     *
+     * Non-English locales merge over English so missing keys still resolve.
+     *
+     * @return array<string, string>
+     */
     public static function dictionary(string $locale): array
     {
         $en = [

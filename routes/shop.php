@@ -1,5 +1,13 @@
 <?php
 
+/**
+ * Storefront + account + auth routes for SANA Market.
+ *
+ * Sensitive POSTs (login, register, contact, newsletter, checkout) use throttle
+ * middleware to reduce brute-force and spam. Cart is session-based (guest OK);
+ * checkout/wishlist/account require auth.
+ */
+
 use App\Http\Controllers\AccountController;
 use App\Http\Controllers\ApiController;
 use App\Http\Controllers\AuthController;

@@ -3,6 +3,7 @@
 @section('content')
 @include('admin._nav')
 
+{{-- KPI cards --}}
 <div class="section-head">
     <div>
         <h1 class="font-display" style="margin:0;">Admin analytics</h1>
@@ -21,6 +22,7 @@
     <div class="admin-stat"><span>Avg rating</span><strong>{{ $avgRating }}</strong></div>
 </div>
 
+{{-- Charts: 7-day sales + status breakdown --}}
 <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:1.25rem;" class="section">
     <div class="panel">
         <h2 style="margin-top:0;font-size:1.1rem;">Sales (7 days)</h2>

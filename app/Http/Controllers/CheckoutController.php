@@ -1,5 +1,14 @@
 <?php
 
+/**
+ * |--------------------------------------------------------------------------
+ * | Checkout & order placement
+ * |--------------------------------------------------------------------------
+ * | Auth-only. Recalculates totals server-side (never trust client totals).
+ * | Payment gateways are stubbed — orders stay `pending` after place().
+ * | Stock decrement is conditional on sufficient stock at write time.
+ */
+
 namespace App\Http\Controllers;
 
 use App\Models\Address;
@@ -8,13 +17,23 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
 use App\Support\Marketplace;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\View\View;
 
+/**
+ * Checkout form, transactional order creation, and confirmation page.
+ *
+ * @package App\Http\Controllers
+ */
 class CheckoutController extends Controller
 {
-    public function show()
+    /**
+     * Show checkout with address book, shipping options, tax, and payment methods.
+     */
+    public function show(): View|RedirectResponse
     {
         $cart = session('cart', []);
 
@@ -59,7 +78,13 @@ class CheckoutController extends Controller
         ));
     }
 
-    public function place(Request $request)
+    /**
+     * Create order + items in a DB transaction, optionally save address, clear cart.
+     *
+     * Side effects: decrements product stock when stock >= qty; increments sold_count.
+     * Rate-limited at the route layer (throttle:10,1).
+     */
+    public function place(Request $request): RedirectResponse
     {
         $cart = session('cart', []);
 
@@ -139,6 +164,7 @@ class CheckoutController extends Controller
                     'price' => $item['price'],
                 ]);
 
+                // Conditional decrement avoids going negative if stock raced since cart add.
                 Product::where('id', $productId)->where('stock', '>=', $item['quantity'])->decrement('stock', $item['quantity']);
                 Product::where('id', $productId)->increment('sold_count', $item['quantity']);
             }
@@ -152,7 +178,10 @@ class CheckoutController extends Controller
         return redirect()->route('checkout.confirmation', $order)->with('success', 'Order placed! Complete payment using your selected method.');
     }
 
-    public function confirmation(Order $order)
+    /**
+     * Order confirmation — owner or admin only (IDOR protection).
+     */
+    public function confirmation(Order $order): View
     {
         abort_unless($order->user_id === auth()->id() || auth()->user()?->isAdmin(), 403);
 
@@ -161,6 +190,11 @@ class CheckoutController extends Controller
         return view('checkout-confirmation', compact('order'));
     }
 
+    /**
+     * Available payment method labels shown on the checkout form (stub integrations).
+     *
+     * @return array<string, string>
+     */
     protected function paymentMethods(): array
     {
         return [

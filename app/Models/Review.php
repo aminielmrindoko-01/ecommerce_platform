@@ -5,6 +5,13 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * Product review with 1–5 rating. Guest reviews allowed (nullable user_id).
+ *
+ * Cascades when the product is deleted; user set null on user delete.
+ *
+ * @package App\Models
+ */
 class Review extends Model
 {
     protected $fillable = [

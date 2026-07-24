@@ -3,6 +3,7 @@
 @section('title', mt('checkout.title'))
 
 @section('content')
+{{-- Checkout title with active ship-to / tax context --}}
 <div class="section-head">
     <div>
         <h1 class="font-display" style="margin:0;">{{ mt('checkout.title') }}</h1>
@@ -13,6 +14,7 @@
 <form method="POST" action="{{ route('checkout.place') }}" style="display:grid;grid-template-columns:1.4fr .9fr;gap:1.25rem;align-items:start;">
     @csrf
     <div style="display:grid;gap:1rem;">
+        {{-- Delivery address (saved chips prefill via inline script) --}}
         <section class="panel">
             <h2 style="margin-top:0;font-size:1.15rem;">Delivery address</h2>
             @if($addresses->isNotEmpty())
@@ -56,6 +58,7 @@
             </label>
         </section>
 
+        {{-- Shipping method radios --}}
         <section class="panel">
             <h2 style="margin-top:0;font-size:1.15rem;">Delivery option</h2>
             @foreach($shippingOptions as $key => $option)
@@ -69,6 +72,7 @@
             @endforeach
         </section>
 
+        {{-- Payment method radios (gateways stubbed server-side) --}}
         <section class="panel">
             <h2 style="margin-top:0;font-size:1.15rem;">Payment method</h2>
             <p style="color:var(--color-ink-muted);font-size:.9rem;margin-top:0;">Select a method. Gateway charges are stubbed until API keys are configured — your order is recorded securely with CSRF protection.</p>
@@ -86,6 +90,7 @@
         </section>
     </div>
 
+    {{-- Sticky order summary --}}
     <aside class="panel glass-panel" style="position:sticky;top:5.5rem;">
         <h2 style="margin-top:0;font-size:1.15rem;">Order summary</h2>
         @foreach($cart as $item)

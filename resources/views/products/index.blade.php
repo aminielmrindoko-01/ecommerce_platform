@@ -3,6 +3,7 @@
 @section('title', 'Products')
 
 @section('content')
+{{-- Catalog header --}}
 <div class="section-head">
     <div>
         <h1 class="font-display" style="margin:0;font-size:clamp(1.6rem,3vw,2.2rem);">All products</h1>
@@ -14,6 +15,7 @@
 </div>
 
 @if(!empty($recentSearches) || !empty($popularSearches))
+    {{-- Recent / popular search chips --}}
     <div class="panel section" style="padding:1rem;">
         @if(!empty($recentSearches))
             <div style="margin-bottom:.65rem;">
@@ -36,6 +38,7 @@
     </div>
 @endif
 
+{{-- Filters sidebar + product grid --}}
 <div style="display:grid;grid-template-columns:260px 1fr;gap:1.25rem;align-items:start;">
     <aside class="panel filter-sidebar" aria-label="Filters">
         <form method="GET" action="{{ route('products.index') }}">

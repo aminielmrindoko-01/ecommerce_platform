@@ -1,11 +1,22 @@
 <?php
 
+/**
+ * Marketplace schema expansion: categories, reviews, Q&A, coupons, wishlists,
+ * addresses, plus product merchandising columns and order checkout fields.
+ *
+ * Indexes on products support filter/sort (category+brand, flags, price).
+ * Wishlists enforce unique (user, product). Reviews cascade with products.
+ */
+
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+    /**
+     * Create marketplace tables and alter core catalog/order/user schemas.
+     */
     public function up(): void
     {
         Schema::create('categories', function (Blueprint $table) {
@@ -20,6 +31,7 @@ return new class extends Migration
         });
 
         Schema::table('products', function (Blueprint $table) {
+            // nullOnDelete keeps products if a category is removed from merchandising.
             $table->foreignId('category_id')->nullable()->after('vendor_id')->constrained()->nullOnDelete();
             $table->string('slug')->nullable()->unique()->after('name');
             $table->string('brand')->nullable()->after('slug');
@@ -84,6 +96,7 @@ return new class extends Migration
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
             $table->foreignId('product_id')->constrained()->cascadeOnDelete();
             $table->timestamps();
+            // Prevent duplicate heart/save for the same product per user.
             $table->unique(['user_id', 'product_id']);
         });
 
@@ -104,6 +117,7 @@ return new class extends Migration
         });
 
         Schema::table('orders', function (Blueprint $table) {
+            // Checkout snapshot fields — totals already on total_price.
             $table->string('payment_method')->nullable()->after('status');
             $table->string('shipping_method')->nullable()->after('payment_method');
             $table->decimal('shipping_cost', 12, 2)->default(0)->after('shipping_method');
@@ -120,6 +134,9 @@ return new class extends Migration
         });
     }
 
+    /**
+     * Drop marketplace additions in reverse dependency order.
+     */
     public function down(): void
     {
         Schema::table('users', function (Blueprint $table) {

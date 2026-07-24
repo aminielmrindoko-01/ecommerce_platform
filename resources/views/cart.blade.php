@@ -3,6 +3,7 @@
 @section('title', mt('cart.title'))
 
 @section('content')
+{{-- Cart header --}}
 <div class="section-head">
     <div>
         <h1 class="font-display" style="margin:0;">{{ mt('cart.title') }}</h1>
@@ -12,6 +13,7 @@
 </div>
 
 @if(count($cart) > 0)
+{{-- Line items + order summary (coupon, tax, shipping) --}}
 <div style="display:grid;grid-template-columns:1.5fr .9fr;gap:1.25rem;align-items:start;">
     <div class="panel" style="padding:0;">
         @foreach($cart as $id => $item)
@@ -34,6 +36,7 @@
     </div>
 
     <aside class="panel">
+        {{-- Cart totals sidebar --}}
         <h2 style="margin-top:0;font-size:1.15rem;">Order summary</h2>
         <div style="display:grid;gap:.55rem;font-size:.95rem;">
             <div style="display:flex;justify-content:space-between;"><span>Subtotal</span><strong>{{ money($subtotal) }}</strong></div>

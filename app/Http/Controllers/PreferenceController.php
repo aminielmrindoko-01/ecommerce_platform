@@ -1,13 +1,32 @@
 <?php
 
+/**
+ * |--------------------------------------------------------------------------
+ * | Locale / currency / country preferences
+ * |--------------------------------------------------------------------------
+ * | Writes allow-listed values to session and long-lived cookies so
+ * | SetMarketplacePreferences can restore them across visits.
+ */
+
 namespace App\Http\Controllers;
 
 use App\Support\Marketplace;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
+/**
+ * Updates visitor marketplace preferences from the topbar form.
+ *
+ * @package App\Http\Controllers
+ */
 class PreferenceController extends Controller
 {
-    public function update(Request $request)
+    /**
+     * Validate and persist selected locale, currency, and/or country.
+     *
+     * Cookies expire in ~1 year; session is updated immediately for the next request.
+     */
+    public function update(Request $request): RedirectResponse
     {
         $data = $request->validate([
             'locale' => 'nullable|in:'.implode(',', array_keys(Marketplace::languages())),
