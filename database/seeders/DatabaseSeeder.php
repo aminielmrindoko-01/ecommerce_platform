@@ -3,37 +3,44 @@
 namespace Database\Seeders;
 
 use App\Models\User;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
 {
-    use WithoutModelEvents;
-
-    /**
-     * Seed the application's database.
-     */
     public function run(): void
     {
-        // Create default admin and test users.
-        User::create([
-            'name' => 'Admin User',
-            'email' => 'admin@example.com',
-            'password' => bcrypt('password'),
-            'role' => 'admin',
-        ]);
+        User::updateOrCreate(
+            ['email' => 'admin@example.com'],
+            [
+                'name' => 'Admin User',
+                'password' => bcrypt('password'),
+                'role' => 'admin',
+                'phone' => '+255700000001',
+            ]
+        );
 
-        User::create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-            'password' => bcrypt('password'),
-            'role' => 'customer',
-        ]);
+        User::updateOrCreate(
+            ['email' => 'test@example.com'],
+            [
+                'name' => 'Test User',
+                'password' => bcrypt('password'),
+                'role' => 'customer',
+                'phone' => '+255700000002',
+            ]
+        );
 
-        // Seed vendors and products
+        User::updateOrCreate(
+            ['email' => 'seller@example.com'],
+            [
+                'name' => 'Seller Demo',
+                'password' => bcrypt('password'),
+                'role' => 'vendor',
+                'phone' => '+255700000003',
+            ]
+        );
+
         $this->call([
-            VendorSeeder::class,
-            ProductSeeder::class,
+            MarketplaceSeeder::class,
         ]);
     }
 }

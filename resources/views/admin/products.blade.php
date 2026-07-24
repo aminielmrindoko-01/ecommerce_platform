@@ -1,49 +1,36 @@
 @extends('layouts.app')
-
+@section('title', 'Admin products')
 @section('content')
-
-<div class="page-header">
-    <h1>Manage Products</h1>
-    <p>Review, edit, or remove products from the store.</p>
+@include('admin._nav')
+<div class="section-head">
+    <div><h1 class="font-display" style="margin:0;">Products</h1><p>Catalog management</p></div>
+    <a class="btn btn-primary" href="{{ route('products.create') }}">Add product</a>
 </div>
-
-<div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:24px;">
-    <a href="{{ route('admin.dashboard') }}" class="btn btn-secondary">Dashboard</a>
-    <a href="{{ route('admin.vendors') }}" class="btn btn-primary">Vendors</a>
-    <a href="{{ route('admin.users') }}" class="btn btn-primary">Users</a>
-    <a href="{{ route('admin.orders') }}" class="btn btn-secondary">Orders</a>
+<div class="panel" style="overflow:auto;">
+<table style="width:100%;border-collapse:collapse;min-width:720px;">
+<thead><tr style="text-align:left;border-bottom:1px solid var(--color-border);">
+<th style="padding:.75rem;">Product</th><th>Vendor</th><th>Stock</th><th>Price</th><th>Actions</th>
+</tr></thead>
+<tbody>
+@foreach($products as $product)
+<tr style="border-bottom:1px solid var(--color-border);">
+<td style="padding:.75rem;display:flex;gap:.65rem;align-items:center;">
+<img src="{{ $product->image_url }}" alt="" width="48" height="48" style="border-radius:8px;object-fit:cover;">
+<span>{{ $product->name }}</span>
+</td>
+<td>{{ $product->vendor->store_name ?? '—' }}</td>
+<td>{{ $product->stock }}</td>
+<td>TSh {{ number_format($product->price,0) }}</td>
+<td style="padding:.75rem;">
+<a class="btn btn-ghost" href="{{ route('products.edit', $product->id) }}" style="padding:.35rem .65rem;">Edit</a>
+<form action="{{ route('admin.products.destroy', $product->id) }}" method="POST" style="display:inline;">@csrf @method('DELETE')
+<button class="btn btn-danger" type="submit" style="padding:.35rem .65rem;" onclick="return confirm('Delete product?')">Delete</button>
+</form>
+</td>
+</tr>
+@endforeach
+</tbody>
+</table>
 </div>
-
-<div style="background:white;padding:24px;border-radius:14px;box-shadow:0 10px 30px rgba(15,23,42,0.08);">
-    <table style="width:100%;border-collapse:collapse;">
-        <thead>
-            <tr style="background:#f3f4f6;text-align:left;">
-                <th style="padding:14px;">Product</th>
-                <th style="padding:14px;">Vendor</th>
-                <th style="padding:14px;">Stock</th>
-                <th style="padding:14px;">Price</th>
-                <th style="padding:14px;">Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach($products as $product)
-                <tr style="border-top:1px solid #e5e7eb;">
-                    <td style="padding:14px;">{{ $product->name }}</td>
-                    <td style="padding:14px;">{{ $product->vendor->store_name ?? 'Unknown' }}</td>
-                    <td style="padding:14px;">{{ $product->stock }}</td>
-                    <td style="padding:14px;">TSh {{ number_format($product->price,0) }}</td>
-                    <td style="padding:14px;">
-                        <a href="{{ route('products.edit', $product->id) }}" class="btn btn-primary" style="margin-right:8px;">Edit</a>
-                        <form action="{{ route('admin.products.destroy', $product->id) }}" method="POST" style="display:inline;">
-                            @csrf
-                            @method('DELETE')
-                            <button type="submit" class="btn" style="background:#ef4444;color:white;border:none;">Delete</button>
-                        </form>
-                    </td>
-                </tr>
-            @endforeach
-        </tbody>
-    </table>
-</div>
-
+<div style="margin-top:1rem;">{{ $products->links() }}</div>
 @endsection

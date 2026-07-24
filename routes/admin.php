@@ -1,15 +1,20 @@
 <?php
 
+use App\Http\Controllers\AdminController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
-    Route::get('/', [App\Http\Controllers\AdminController::class, 'dashboard'])->name('dashboard');
-    Route::get('/products', [App\Http\Controllers\AdminController::class, 'products'])->name('products');
-    Route::delete('/products/{id}', [App\Http\Controllers\AdminController::class, 'destroyProduct'])->name('products.destroy');
-    Route::get('/vendors', [App\Http\Controllers\AdminController::class, 'vendors'])->name('vendors');
-    Route::post('/vendors/{id}/toggle', [App\Http\Controllers\AdminController::class, 'toggleVendorVerification'])->name('vendors.toggle');
-    Route::get('/users', [App\Http\Controllers\AdminController::class, 'users'])->name('users');
-    Route::put('/users/{id}', [App\Http\Controllers\AdminController::class, 'updateUserRole'])->name('users.update');
-    Route::get('/orders', [App\Http\Controllers\AdminController::class, 'orders'])->name('orders');
-    Route::put('/orders/{id}', [App\Http\Controllers\AdminController::class, 'updateOrderStatus'])->name('orders.update');
+    Route::get('/', [AdminController::class, 'dashboard'])->name('dashboard');
+    Route::get('/products', [AdminController::class, 'products'])->name('products');
+    Route::delete('/products/{id}', [AdminController::class, 'destroyProduct'])->name('products.destroy');
+    Route::get('/vendors', [AdminController::class, 'vendors'])->name('vendors');
+    Route::post('/vendors/{id}/toggle', [AdminController::class, 'toggleVendorVerification'])->name('vendors.toggle');
+    Route::get('/users', [AdminController::class, 'users'])->name('users');
+    Route::put('/users/{id}', [AdminController::class, 'updateUserRole'])->name('users.update');
+    Route::get('/orders', [AdminController::class, 'orders'])->name('orders');
+    Route::put('/orders/{id}', [AdminController::class, 'updateOrderStatus'])->name('orders.update');
+    Route::get('/categories', [AdminController::class, 'categories'])->name('categories');
+    Route::get('/coupons', [AdminController::class, 'coupons'])->name('coupons');
+    Route::get('/reviews', [AdminController::class, 'reviews'])->name('reviews');
+    Route::get('/inventory', [AdminController::class, 'inventory'])->name('inventory');
 });

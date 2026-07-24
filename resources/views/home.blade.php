@@ -1,80 +1,255 @@
 @extends('layouts.app')
 
+@section('title', 'SANA Market')
+@section('meta_description', 'Shop phones, fashion, home & beauty from verified sellers across East Africa.')
+
 @section('content')
+<section class="hero-slider section" data-hero-slider aria-roledescription="carousel" aria-label="Featured promotions">
+    @php
+        $slides = [
+            [
+                'image' => 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=1600&q=80',
+                'title' => 'SANA Market',
+                'copy' => 'The marketplace for quality goods — verified sellers, secure payments, nationwide delivery.',
+                'cta' => route('products.index'),
+                'ctaLabel' => 'Shop bestsellers',
+            ],
+            [
+                'image' => 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=1600&q=80',
+                'title' => 'SANA Market',
+                'copy' => 'Flagship phones & audio on flash sale — limited stock, countdown live.',
+                'cta' => route('deals'),
+                'ctaLabel' => 'View flash deals',
+            ],
+            [
+                'image' => 'https://images.unsplash.com/photo-1445205170230-053b83016050?auto=format&fit=crop&w=1600&q=80',
+                'title' => 'SANA Market',
+                'copy' => 'Fashion drops from Nike, Adidas & independent makers — free shipping over TSh 150,000.',
+                'cta' => route('products.index', ['category' => 'fashion']),
+                'ctaLabel' => 'Explore fashion',
+            ],
+        ];
+    @endphp
 
-<!-- Hero Section -->
-<div style="background:linear-gradient(135deg, #667eea 0%, #764ba2 100%);color:white;padding:60px 32px;border-radius:16px;margin-bottom:40px;text-align:center;">
-    <h1 style="font-size:2.5rem;margin-bottom:16px;">Welcome to SANA Market</h1>
-    <p style="font-size:1.2rem;margin-bottom:24px;opacity:0.95;">Your one-stop online marketplace for quality products from trusted vendors</p>
-    <a href="{{ route('products.index') }}" class="btn btn-secondary" style="display:inline-block;text-decoration:none;padding:14px 32px;font-size:1.1rem;">Start Shopping</a>
-</div>
-
-<!-- Featured Categories -->
-<div style="margin-bottom:48px;">
-    <h2 style="font-size:1.8rem;margin-bottom:24px;color:#111827;">Featured Categories</h2>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:20px;">
-        <div style="background:white;padding:24px;border-radius:12px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,0.08);transition:all 0.3s;cursor:pointer;" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 12px 24px rgba(0,0,0,0.12)'" onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 2px 8px rgba(0,0,0,0.08)'">
-            <div style="font-size:3rem;margin-bottom:12px;">📱</div>
-            <h3 style="margin-bottom:8px;color:#111827;">Electronics</h3>
-            <p style="color:#6b7280;margin-bottom:16px;">Latest gadgets and tech devices</p>
-            <a href="{{ route('categories') }}" style="color:#667eea;text-decoration:none;font-weight:600;">Browse →</a>
+    @foreach($slides as $i => $slide)
+        <div class="hero-slide {{ $i === 0 ? 'is-active' : '' }}" data-hero-slide style="background-image:url('{{ $slide['image'] }}')">
+            <div class="hero-overlay">
+                <p class="hero-brand">{{ $slide['title'] }}</p>
+                <p class="hero-copy">{{ $slide['copy'] }}</p>
+                <div class="hero-actions">
+                    <a class="btn btn-accent" href="{{ $slide['cta'] }}">{{ $slide['ctaLabel'] }}</a>
+                    <a class="btn btn-ghost" href="{{ route('vendors') }}" style="border-color:rgba(255,255,255,.35);color:#fff;">Meet sellers</a>
+                </div>
+            </div>
         </div>
+    @endforeach
+    <div class="hero-dots" role="tablist">
+        @foreach($slides as $i => $slide)
+            <button type="button" class="hero-dot {{ $i === 0 ? 'is-active' : '' }}" data-hero-dot aria-label="Show slide {{ $i + 1 }}"></button>
+        @endforeach
+    </div>
+</section>
 
-        <div style="background:white;padding:24px;border-radius:12px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,0.08);transition:all 0.3s;cursor:pointer;" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 12px 24px rgba(0,0,0,0.12)'" onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 2px 8px rgba(0,0,0,0.08)'">
-            <div style="font-size:3rem;margin-bottom:12px;">👕</div>
-            <h3 style="margin-bottom:8px;color:#111827;">Fashion</h3>
-            <p style="color:#6b7280;margin-bottom:16px;">Clothing and accessories</p>
-            <a href="{{ route('categories') }}" style="color:#667eea;text-decoration:none;font-weight:600;">Browse →</a>
+<section class="section trust-strip" aria-label="Trust signals">
+    <div class="trust-item"><strong>Secure pay</strong><span style="color:var(--color-ink-muted);font-size:.9rem;">Cards, M-Pesa & COD</span></div>
+    <div class="trust-item"><strong>Fast delivery</strong><span style="color:var(--color-ink-muted);font-size:.9rem;">1–5 days nationwide</span></div>
+    <div class="trust-item"><strong>Buyer protection</strong><span style="color:var(--color-ink-muted);font-size:.9rem;">Easy 7-day returns</span></div>
+    <div class="trust-item"><strong>Verified sellers</strong><span style="color:var(--color-ink-muted);font-size:.9rem;">Quality you can trust</span></div>
+</section>
+
+<section class="section">
+    <div class="section-head">
+        <div>
+            <h2>Shop by category</h2>
+            <p>Browse curated departments from phones to home.</p>
         </div>
+        <a class="btn btn-ghost" href="{{ route('categories') }}">All categories</a>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem;">
+        @forelse($categories as $category)
+            <a class="category-chip" href="{{ route('products.index', ['category' => $category->slug]) }}" style="background-image:url('{{ $category->image }}')">
+                <strong style="font-size:1.1rem;">{{ $category->name }}</strong>
+                <span style="opacity:.9;font-size:.9rem;">{{ $category->description }}</span>
+            </a>
+        @empty
+            <p>Categories coming soon.</p>
+        @endforelse
+    </div>
+</section>
 
-        <div style="background:white;padding:24px;border-radius:12px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,0.08);transition:all 0.3s;cursor:pointer;" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 12px 24px rgba(0,0,0,0.12)'" onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 2px 8px rgba(0,0,0,0.08)'">
-            <div style="font-size:3rem;margin-bottom:12px;">🏠</div>
-            <h3 style="margin-bottom:8px;color:#111827;">Home</h3>
-            <p style="color:#6b7280;margin-bottom:16px;">Furniture and home decor</p>
-            <a href="{{ route('categories') }}" style="color:#667eea;text-decoration:none;font-weight:600;">Browse →</a>
+@if($flashSales->isNotEmpty())
+<section class="section">
+    <div class="section-head">
+        <div>
+            <h2>Flash sales</h2>
+            <p>Limited-time prices — ends soon.</p>
         </div>
+        <div class="flash-timer" data-countdown="{{ $flashEndsAt }}" aria-live="polite"></div>
+    </div>
+    <div class="products-grid">
+        @foreach($flashSales as $product)
+            <x-product-card :product="$product" />
+        @endforeach
+    </div>
+</section>
+@endif
 
-        <div style="background:white;padding:24px;border-radius:12px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,0.08);transition:all 0.3s;cursor:pointer;" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 12px 24px rgba(0,0,0,0.12)'" onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 2px 8px rgba(0,0,0,0.08)'">
-            <div style="font-size:3rem;margin-bottom:12px;">💄</div>
-            <h3 style="margin-bottom:8px;color:#111827;">Beauty</h3>
-            <p style="color:#6b7280;margin-bottom:16px;">Beauty and wellness products</p>
-            <a href="{{ route('categories') }}" style="color:#667eea;text-decoration:none;font-weight:600;">Browse →</a>
+<section class="section">
+    <div class="section-head">
+        <div>
+            <h2>Featured picks</h2>
+            <p>Editor-selected bestsellers this week.</p>
+        </div>
+        <a class="btn btn-ghost" href="{{ route('products.index', ['sort' => 'popular']) }}">See more</a>
+    </div>
+    <div class="products-grid">
+        @forelse($featured as $product)
+            <x-product-card :product="$product" />
+        @empty
+            <p class="panel">No featured products yet. Seed the database to populate the marketplace.</p>
+        @endforelse
+    </div>
+</section>
+
+<section class="section">
+    <div class="section-head">
+        <div>
+            <h2>Best sellers</h2>
+            <p>What shoppers across East Africa are buying.</p>
         </div>
     </div>
-</div>
+    <div class="products-grid">
+        @foreach($bestSellers as $product)
+            <x-product-card :product="$product" />
+        @endforeach
+    </div>
+</section>
 
-<!-- Why Choose Us -->
-<div style="background:white;padding:40px;border-radius:12px;margin-bottom:40px;">
-    <h2 style="font-size:1.8rem;margin-bottom:32px;color:#111827;text-align:center;">Why Choose SANA Market?</h2>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:32px;">
-        <div style="text-align:center;">
-            <div style="font-size:3rem;margin-bottom:16px;">✓</div>
-            <h3 style="margin-bottom:8px;color:#111827;">Quality Products</h3>
-            <p style="color:#6b7280;line-height:1.6;">Curated selection from trusted vendors</p>
-        </div>
-        <div style="text-align:center;">
-            <div style="font-size:3rem;margin-bottom:16px;">🚚</div>
-            <h3 style="margin-bottom:8px;color:#111827;">Fast Delivery</h3>
-            <p style="color:#6b7280;line-height:1.6;">Quick and reliable shipping options</p>
-        </div>
-        <div style="text-align:center;">
-            <div style="font-size:3rem;margin-bottom:16px;">🛡️</div>
-            <h3 style="margin-bottom:8px;color:#111827;">Secure Payment</h3>
-            <p style="color:#6b7280;line-height:1.6;">Protected transactions and buyer guarantee</p>
-        </div>
-        <div style="text-align:center;">
-            <div style="font-size:3rem;margin-bottom:16px;">💬</div>
-            <h3 style="margin-bottom:8px;color:#111827;">Customer Support</h3>
-            <p style="color:#6b7280;line-height:1.6;">24/7 assistance for all your needs</p>
+<section class="section">
+    <div class="section-head">
+        <div>
+            <h2>New arrivals</h2>
+            <p>Fresh drops from verified sellers.</p>
         </div>
     </div>
-</div>
+    <div class="products-grid">
+        @foreach($newArrivals as $product)
+            <x-product-card :product="$product" />
+        @endforeach
+    </div>
+</section>
 
-<!-- CTA Section -->
-<div style="background:linear-gradient(135deg, #667eea 0%, #764ba2 100%);color:white;padding:40px;border-radius:12px;text-align:center;">
-    <h2 style="font-size:1.8rem;margin-bottom:16px;">Ready to Find What You Need?</h2>
-    <p style="font-size:1.1rem;margin-bottom:24px;opacity:0.95;">Browse our extensive collection of products from verified sellers</p>
-    <a href="{{ route('products.index') }}" class="btn btn-secondary" style="display:inline-block;text-decoration:none;padding:12px 28px;">View All Products</a>
-</div>
+<section class="section">
+    <div class="section-head">
+        <div>
+            <h2>Trending now</h2>
+            <p>High-rated products shoppers love.</p>
+        </div>
+    </div>
+    <div class="products-grid">
+        @foreach($trending as $product)
+            <x-product-card :product="$product" />
+        @endforeach
+    </div>
+</section>
 
+<section class="section">
+    <div class="section-head">
+        <div>
+            <h2>Recommended for you</h2>
+            <p>Based on popular categories and ratings.</p>
+        </div>
+    </div>
+    <div class="products-grid">
+        @foreach($featured->take(4)->merge($trending->take(4))->unique('id')->take(8) as $product)
+            <x-product-card :product="$product" />
+        @endforeach
+    </div>
+</section>
+
+<section class="section">
+    <div class="section-head">
+        <div>
+            <h2>Recently viewed</h2>
+            <p>Pick up where you left off.</p>
+        </div>
+    </div>
+    <div class="products-grid" data-recently-viewed>
+        <div class="skeleton" style="height:280px;"></div>
+        <div class="skeleton" style="height:280px;"></div>
+        <div class="skeleton" style="height:280px;"></div>
+        <div class="skeleton" style="height:280px;"></div>
+    </div>
+</section>
+
+<section class="section">
+    <div class="section-head">
+        <div>
+            <h2>Top brands</h2>
+            <p>Shop names you know and trust.</p>
+        </div>
+    </div>
+    <div class="chip-row">
+        @foreach($brands as $brand)
+            <a class="chip" href="{{ route('products.index', ['brand' => $brand]) }}">{{ $brand }}</a>
+        @endforeach
+    </div>
+</section>
+
+<section class="section">
+    <div class="section-head">
+        <div>
+            <h2>Trusted sellers</h2>
+            <p>Verified stores shipping across Tanzania.</p>
+        </div>
+        <a class="btn btn-ghost" href="{{ route('vendors') }}">All sellers</a>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;">
+        @foreach($vendors as $vendor)
+            <div class="panel">
+                <strong style="font-size:1.05rem;">{{ $vendor->store_name }}</strong>
+                @if($vendor->is_verified)
+                    <span class="badge badge-new" style="margin-left:.4rem;">Verified</span>
+                @endif
+                <p style="color:var(--color-ink-muted);margin:.5rem 0;">{{ $vendor->description }}</p>
+                <div style="font-size:.9rem;color:var(--color-ink-muted);">★ {{ number_format($vendor->rating_avg, 1) }} · {{ $vendor->products_count }} products · {{ $vendor->location }}</div>
+            </div>
+        @endforeach
+    </div>
+</section>
+
+<section class="section">
+    <div class="section-head">
+        <div>
+            <h2>What shoppers say</h2>
+            <p>Real feedback from the SANA community.</p>
+        </div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;">
+        <blockquote class="panel" style="margin:0;">
+            <p style="margin:0 0 .75rem;line-height:1.6;">“Ordered a Galaxy phone — arrived sealed with invoice. Checkout with M-Pesa was seamless.”</p>
+            <footer style="color:var(--color-ink-muted);">— Neema, Dar es Salaam</footer>
+        </blockquote>
+        <blockquote class="panel" style="margin:0;">
+            <p style="margin:0 0 .75rem;line-height:1.6;">“Love the flash deals. Nike sneakers came in two days and packaging was solid.”</p>
+            <footer style="color:var(--color-ink-muted);">— Brian, Arusha</footer>
+        </blockquote>
+        <blockquote class="panel" style="margin:0;">
+            <p style="margin:0 0 .75rem;line-height:1.6;">“As a small seller, the store tools and verified badge helped me get more orders.”</p>
+            <footer style="color:var(--color-ink-muted);">— Fatma, vendor</footer>
+        </blockquote>
+    </div>
+</section>
+
+<section class="panel section" style="display:grid;gap:1rem;grid-template-columns:1.2fr .8fr;align-items:center;background:linear-gradient(120deg,#0d7377,#095456);color:#fff;border:0;">
+    <div>
+        <h2 style="margin:0 0 .5rem;color:#fff;">Get SANA deals in your inbox</h2>
+        <p style="margin:0;opacity:.9;">Weekly drops, flash alerts, and seller exclusives — no spam.</p>
+    </div>
+    <form action="{{ route('newsletter.subscribe') }}" method="POST" style="display:flex;gap:.5rem;flex-wrap:wrap;">
+        @csrf
+        <input class="form-control" type="email" name="email" required placeholder="you@email.com" style="flex:1;min-width:180px;">
+        <button class="btn btn-accent" type="submit">Subscribe</button>
+    </form>
+</section>
 @endsection

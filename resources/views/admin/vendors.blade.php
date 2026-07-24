@@ -1,45 +1,21 @@
 @extends('layouts.app')
-
+@section('title', 'Admin vendors')
 @section('content')
-
-<div class="page-header">
-    <h1>Manage Vendors</h1>
-    <p>View vendor details and verify trusted sellers.</p>
+@include('admin._nav')
+<h1 class="font-display">Vendors</h1>
+<div class="panel" style="margin-top:1rem;padding:0;">
+@foreach($vendors as $vendor)
+<div style="display:flex;justify-content:space-between;gap:1rem;padding:1rem;border-bottom:1px solid var(--color-border);flex-wrap:wrap;align-items:center;">
+<div>
+<strong>{{ $vendor->store_name }}</strong>
+@if($vendor->is_verified)<span class="badge badge-new">Verified</span>@endif
+<div style="color:var(--color-ink-muted);font-size:.9rem;">{{ $vendor->email }} · {{ $vendor->products_count }} products · {{ $vendor->location }}</div>
 </div>
-
-<div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:24px;">
-    <a href="{{ route('admin.dashboard') }}" class="btn btn-secondary">Dashboard</a>
-    <a href="{{ route('admin.products') }}" class="btn btn-primary">Products</a>
-    <a href="{{ route('admin.users') }}" class="btn btn-primary">Users</a>
-    <a href="{{ route('admin.orders') }}" class="btn btn-secondary">Orders</a>
+<form method="POST" action="{{ route('admin.vendors.toggle', $vendor->id) }}">
+@csrf
+<button class="btn {{ $vendor->is_verified ? 'btn-ghost' : 'btn-primary' }}" type="submit">{{ $vendor->is_verified ? 'Unverify' : 'Verify' }}</button>
+</form>
 </div>
-
-<div style="background:white;padding:24px;border-radius:14px;box-shadow:0 10px 30px rgba(15,23,42,0.08);">
-    <table style="width:100%;border-collapse:collapse;">
-        <thead>
-            <tr style="background:#f3f4f6;text-align:left;">
-                <th style="padding:14px;">Vendor</th>
-                <th style="padding:14px;">Email</th>
-                <th style="padding:14px;">Verified</th>
-                <th style="padding:14px;">Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach($vendors as $vendor)
-                <tr style="border-top:1px solid #e5e7eb;">
-                    <td style="padding:14px;">{{ $vendor->store_name }}</td>
-                    <td style="padding:14px;">{{ $vendor->email ?? '—' }}</td>
-                    <td style="padding:14px;">{{ $vendor->is_verified ? 'Yes' : 'No' }}</td>
-                    <td style="padding:14px;">
-                        <form action="{{ route('admin.vendors.toggle', $vendor->id) }}" method="POST" style="display:inline;">
-                            @csrf
-                            <button type="submit" class="btn btn-secondary" style="border:none;">{{ $vendor->is_verified ? 'Revoke' : 'Verify' }}</button>
-                        </form>
-                    </td>
-                </tr>
-            @endforeach
-        </tbody>
-    </table>
+@endforeach
 </div>
-
 @endsection

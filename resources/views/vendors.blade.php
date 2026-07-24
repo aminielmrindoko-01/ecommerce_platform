@@ -1,36 +1,29 @@
 @extends('layouts.app')
-
+@section('title', 'Sellers')
 @section('content')
-
-<div class="page-header">
-    <h1>🧑‍💼 Our Trusted Vendors</h1>
-    <p>Meet our sellers and discover quality products from verified boutiques.</p>
-</div>
-
-<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:24px;">
-    <div style="background:white;padding:28px;border-radius:14px;box-shadow:0 10px 30px rgba(15,23,42,0.08);">
-        <h2 style="margin-bottom:10px;color:#111827;">Tech Haven</h2>
-        <p style="color:#6b7280;line-height:1.7;">Premium electronics and gadgets with fast delivery and authentic warranties.</p>
-        <p style="font-weight:600;margin-top:18px;">Email: techhaven@sana.com</p>
-    </div>
-
-    <div style="background:white;padding:28px;border-radius:14px;box-shadow:0 10px 30px rgba(15,23,42,0.08);">
-        <h2 style="margin-bottom:10px;color:#111827;">Fashion Plus</h2>
-        <p style="color:#6b7280;line-height:1.7;">Contemporary fashion pieces and seasonal collections designed for modern style.</p>
-        <p style="font-weight:600;margin-top:18px;">Email: fashionplus@sana.com</p>
-    </div>
-
-    <div style="background:white;padding:28px;border-radius:14px;box-shadow:0 10px 30px rgba(15,23,42,0.08);">
-        <h2 style="margin-bottom:10px;color:#111827;">Home Essentials</h2>
-        <p style="color:#6b7280;line-height:1.7;">High-quality home decor and furniture selections crafted for comfortable living.</p>
-        <p style="font-weight:600;margin-top:18px;">Email: homeessentials@sana.com</p>
-    </div>
-
-    <div style="background:white;padding:28px;border-radius:14px;box-shadow:0 10px 30px rgba(15,23,42,0.08);">
-        <h2 style="margin-bottom:10px;color:#111827;">Beauty & Wellness</h2>
-        <p style="color:#6b7280;line-height:1.7;">Carefully curated wellness and beauty products for a premium self-care routine.</p>
-        <p style="font-weight:600;margin-top:18px;">Email: beauty@sana.com</p>
+<div class="section-head">
+    <div>
+        <h1 class="font-display" style="margin:0;">Top sellers</h1>
+        <p>Verified and rising stores on SANA Market</p>
     </div>
 </div>
-
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1rem;">
+@foreach($vendors as $vendor)
+<article class="panel">
+    <div style="display:flex;gap:.85rem;align-items:center;">
+        <img src="{{ $vendor->logo ?? 'https://images.unsplash.com/photo-1560472354-b33ff0c44a43?auto=format&fit=crop&w=120&q=80' }}" alt="" width="56" height="56" style="border-radius:12px;object-fit:cover;">
+        <div>
+            <strong>{{ $vendor->store_name }}</strong>
+            @if($vendor->is_verified)<span class="badge badge-new">Verified</span>@endif
+            <div style="color:var(--color-ink-muted);font-size:.9rem;">★ {{ number_format($vendor->rating_avg,1) }} · {{ $vendor->location }}</div>
+        </div>
+    </div>
+    <p style="color:var(--color-ink-muted);line-height:1.6;">{{ $vendor->description }}</p>
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-size:.9rem;color:var(--color-ink-muted);">{{ $vendor->products_count }} products</span>
+        <a class="btn btn-ghost" href="{{ route('products.index') }}">Browse</a>
+    </div>
+</article>
+@endforeach
+</div>
 @endsection

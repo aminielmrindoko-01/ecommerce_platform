@@ -1,57 +1,101 @@
 @extends('layouts.app')
-
+@section('title', 'Admin dashboard')
 @section('content')
+@include('admin._nav')
 
-<div class="page-header">
-    <h1>Admin Dashboard</h1>
-    <p>Full system overview and quick access to administration controls.</p>
-</div>
-
-<div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:24px;">
-    <a href="{{ route('admin.products') }}" class="btn btn-primary">Products</a>
-    <a href="{{ route('admin.vendors') }}" class="btn btn-secondary">Vendors</a>
-    <a href="{{ route('admin.users') }}" class="btn btn-primary">Users</a>
-    <a href="{{ route('admin.orders') }}" class="btn btn-secondary">Orders</a>
-</div>
-
-<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:24px;">
-    <div style="background:white;padding:28px;border-radius:14px;box-shadow:0 10px 30px rgba(15,23,42,0.08);">
-        <h3>Total Users</h3>
-        <p style="font-size:2rem;font-weight:700;margin-top:12px;">{{ $totalUsers }}</p>
-    </div>
-    <div style="background:white;padding:28px;border-radius:14px;box-shadow:0 10px 30px rgba(15,23,42,0.08);">
-        <h3>Total Products</h3>
-        <p style="font-size:2rem;font-weight:700;margin-top:12px;">{{ $totalProducts }}</p>
-    </div>
-    <div style="background:white;padding:28px;border-radius:14px;box-shadow:0 10px 30px rgba(15,23,42,0.08);">
-        <h3>Total Vendors</h3>
-        <p style="font-size:2rem;font-weight:700;margin-top:12px;">{{ $totalVendors }}</p>
-    </div>
-    <div style="background:white;padding:28px;border-radius:14px;box-shadow:0 10px 30px rgba(15,23,42,0.08);">
-        <h3>Total Orders</h3>
-        <p style="font-size:2rem;font-weight:700;margin-top:12px;">{{ $totalOrders }}</p>
+<div class="section-head">
+    <div>
+        <h1 class="font-display" style="margin:0;">Admin analytics</h1>
+        <p>Marketplace health, sales, and inventory signals</p>
     </div>
 </div>
 
-<div style="margin-top:32px;display:grid;grid-template-columns:1fr 1fr;gap:24px;">
-    <div style="background:white;padding:24px;border-radius:14px;box-shadow:0 10px 30px rgba(15,23,42,0.08);">
-        <h2>Latest Products</h2>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem;" class="section">
+    <div class="admin-stat"><span>Revenue</span><strong>TSh {{ number_format($revenue, 0) }}</strong></div>
+    <div class="admin-stat"><span>Orders</span><strong>{{ $totalOrders }}</strong></div>
+    <div class="admin-stat"><span>Pending</span><strong>{{ $pendingOrders }}</strong></div>
+    <div class="admin-stat"><span>Products</span><strong>{{ $totalProducts }}</strong></div>
+    <div class="admin-stat"><span>Users</span><strong>{{ $totalUsers }}</strong></div>
+    <div class="admin-stat"><span>Vendors</span><strong>{{ $totalVendors }}</strong></div>
+    <div class="admin-stat"><span>Low stock</span><strong>{{ $lowStock }}</strong></div>
+    <div class="admin-stat"><span>Avg rating</span><strong>{{ $avgRating }}</strong></div>
+</div>
+
+<div style="display:grid;grid-template-columns:1.4fr 1fr;gap:1.25rem;" class="section">
+    <div class="panel">
+        <h2 style="margin-top:0;font-size:1.1rem;">Sales (7 days)</h2>
+        <canvas id="salesChart" height="120" aria-label="Sales chart"></canvas>
+    </div>
+    <div class="panel">
+        <h2 style="margin-top:0;font-size:1.1rem;">Orders by status</h2>
+        <canvas id="statusChart" height="120" aria-label="Status chart"></canvas>
+    </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;">
+    <div class="panel">
+        <h2 style="margin-top:0;font-size:1.1rem;">Latest products</h2>
         @foreach($recentProducts as $product)
-            <div style="padding:14px 0;border-bottom:1px solid #e5e7eb;">
+            <div style="padding:.7rem 0;border-bottom:1px solid var(--color-border);">
                 <strong>{{ $product->name }}</strong>
-                <p style="margin:6px 0;color:#6b7280;">{{ $product->vendor->store_name ?? 'Vendor' }} · TSh {{ number_format($product->price,0) }}</p>
+                <div style="color:var(--color-ink-muted);font-size:.9rem;">{{ $product->vendor->store_name ?? 'Vendor' }} · TSh {{ number_format($product->price,0) }}</div>
             </div>
         @endforeach
     </div>
-    <div style="background:white;padding:24px;border-radius:14px;box-shadow:0 10px 30px rgba(15,23,42,0.08);">
-        <h2>Recent Orders</h2>
-        @foreach($recentOrders as $order)
-            <div style="padding:14px 0;border-bottom:1px solid #e5e7eb;">
-                <strong>Order #{{ $order->id }}</strong>
-                <p style="margin:6px 0;color:#6b7280;">{{ $order->user->name ?? 'Guest' }} · {{ ucfirst($order->status) }}</p>
+    <div class="panel">
+        <h2 style="margin-top:0;font-size:1.1rem;">Recent orders</h2>
+        @forelse($recentOrders as $order)
+            <div style="padding:.7rem 0;border-bottom:1px solid var(--color-border);">
+                <strong>{{ $order->order_number ?? '#'.$order->id }}</strong>
+                <div style="color:var(--color-ink-muted);font-size:.9rem;">{{ $order->user->name ?? 'Guest' }} · {{ ucfirst($order->status) }}</div>
             </div>
-        @endforeach
+        @empty
+            <p style="color:var(--color-ink-muted);">No orders yet.</p>
+        @endforelse
     </div>
 </div>
-
 @endsection
+
+@push('head')
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
+@endpush
+
+@push('scripts')
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    if (typeof Chart === 'undefined') return;
+    const labels = @json($chartLabels);
+    const data = @json($chartData);
+    const statusLabels = @json($ordersByStatus->keys()->values());
+    const statusData = @json($ordersByStatus->values());
+
+    new Chart(document.getElementById('salesChart'), {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [{
+                label: 'Revenue (TSh)',
+                data,
+                borderColor: '#0d7377',
+                backgroundColor: 'rgba(13,115,119,.15)',
+                fill: true,
+                tension: 0.35,
+            }]
+        },
+        options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+    });
+
+    new Chart(document.getElementById('statusChart'), {
+        type: 'doughnut',
+        data: {
+            labels: statusLabels.length ? statusLabels : ['none'],
+            datasets: [{
+                data: statusData.length ? statusData : [1],
+                backgroundColor: ['#e89b1e', '#0d7377', '#5b6b78', '#0f7a4a']
+            }]
+        },
+        options: { plugins: { legend: { position: 'bottom' } } }
+    });
+});
+</script>
+@endpush

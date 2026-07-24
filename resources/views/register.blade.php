@@ -1,34 +1,28 @@
 @extends('layouts.app')
-
+@section('title', 'Register')
 @section('content')
-
-<div style="max-width:420px;margin:auto;background:white;padding:24px;border-radius:14px;box-shadow:0 18px 60px rgba(0,0,0,0.08);">
-    <h2 style="margin-top:0;">Register</h2>
-
+<div class="panel" style="max-width:440px;margin:1rem auto;">
+    <h1 class="font-display" style="margin-top:0;">Join SANA Market</h1>
+    <p style="color:var(--color-ink-muted);">Create a buyer account in under a minute.</p>
     <form method="POST" action="{{ route('register.submit') }}">
         @csrf
-
-        <input type="text" name="name" value="{{ old('name') }}" placeholder="Full Name" style="width:100%;padding:12px;margin-bottom:12px;border:1px solid #d1d5db;border-radius:10px;" required>
-        @error('name')
-            <div style="color:#dc2626;margin-bottom:12px;">{{ $message }}</div>
-        @enderror
-
-        <input type="email" name="email" value="{{ old('email') }}" placeholder="Email" style="width:100%;padding:12px;margin-bottom:12px;border:1px solid #d1d5db;border-radius:10px;" required>
-        @error('email')
-            <div style="color:#dc2626;margin-bottom:12px;">{{ $message }}</div>
-        @enderror
-
-        <input type="password" name="password" placeholder="Password" style="width:100%;padding:12px;margin-bottom:12px;border:1px solid #d1d5db;border-radius:10px;" required>
-        @error('password')
-            <div style="color:#dc2626;margin-bottom:12px;">{{ $message }}</div>
-        @enderror
-
-        <input type="password" name="password_confirmation" placeholder="Confirm Password" style="width:100%;padding:12px;margin-bottom:16px;border:1px solid #d1d5db;border-radius:10px;" required>
-
-        <button type="submit" style="width:100%;padding:12px;background:#10b981;color:white;border:none;border-radius:10px;cursor:pointer;">Register</button>
+        <div class="form-group">
+            <label for="name">Full name</label>
+            <input class="form-control" id="name" name="name" value="{{ old('name') }}" required>
+            @error('name')<div class="form-error">{{ $message }}</div>@enderror
+        </div>
+        <div class="form-group">
+            <label for="email">Email</label>
+            <input class="form-control" id="email" type="email" name="email" value="{{ old('email') }}" required>
+            @error('email')<div class="form-error">{{ $message }}</div>@enderror
+        </div>
+        <div class="form-group">
+            <label for="password">Password</label>
+            <input class="form-control" id="password" type="password" name="password" required minlength="6">
+            @error('password')<div class="form-error">{{ $message }}</div>@enderror
+        </div>
+        <button class="btn btn-accent" type="submit" style="width:100%;">Create account</button>
     </form>
-
-    <p style="margin-top:18px;">Already have an account? <a href="{{ route('login') }}">Login</a></p>
+    <p style="margin-top:1rem;font-size:.92rem;">Already have an account? <a href="{{ route('login') }}" style="color:var(--color-brand);font-weight:700;">Login</a></p>
 </div>
-
 @endsection

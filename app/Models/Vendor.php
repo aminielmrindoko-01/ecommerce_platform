@@ -3,7 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use App\Models\Product;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Vendor extends Model
 {
@@ -11,9 +11,21 @@ class Vendor extends Model
         'store_name',
         'description',
         'email',
+        'logo',
+        'location',
+        'is_verified',
+        'rating_avg',
     ];
 
-    public function products()
+    protected function casts(): array
+    {
+        return [
+            'is_verified' => 'boolean',
+            'rating_avg' => 'decimal:2',
+        ];
+    }
+
+    public function products(): HasMany
     {
         return $this->hasMany(Product::class);
     }
