@@ -2,21 +2,18 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
 use App\Models\User;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 
-
 class AuthController extends Controller
 {
-
     // Show login page
     public function showLogin()
     {
         return view('login');
     }
-
 
     // Login user
     public function login(Request $request)
@@ -24,34 +21,33 @@ class AuthController extends Controller
 
         $credentials = $request->validate([
             'email' => 'required|email',
-            'password' => 'required'
+            'password' => 'required',
         ]);
 
-
-        if(Auth::attempt($credentials)){
+        if (Auth::attempt($credentials)) {
 
             $request->session()->regenerate();
 
-            return redirect('/products');
+            $user = Auth::user();
+            if ($user && $user->role === 'admin') {
+                return redirect()->route('admin.dashboard');
+            }
+
+            return redirect()->intended(route('home'));
 
         }
 
-
         return back()->withErrors([
-            'email' => 'Invalid login details'
+            'email' => 'Invalid login details',
         ]);
 
     }
-
-
 
     // Show register page
     public function showRegister()
     {
         return view('register');
     }
-
-
 
     // Register user
     public function register(Request $request)
@@ -63,28 +59,21 @@ class AuthController extends Controller
 
             'email' => 'required|email|unique:users',
 
-            'password' => 'required|min:6'
+            'password' => 'required|min:6',
 
         ]);
-
 
         User::create([
-
             'name' => $request->name,
-
             'email' => $request->email,
-
-            'password' => Hash::make($request->password)
-
+            'password' => Hash::make($request->password),
+            'role' => 'customer',
         ]);
 
-
         return redirect('/login')
-            ->with('success','Account created successfully. Please login.');
+            ->with('success', 'Account created successfully. Please login.');
 
     }
-
-
 
     // Logout user
     public function logout(Request $request)
@@ -92,15 +81,11 @@ class AuthController extends Controller
 
         Auth::logout();
 
-
         $request->session()->invalidate();
 
-
         $request->session()->regenerateToken();
-
 
         return redirect('/login');
 
     }
-
 }
