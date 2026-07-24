@@ -4,56 +4,51 @@
 
 <h1>🛒 Your Cart</h1>
 
-<div style="background:white;padding:20px;border-radius:10px;margin-top:20px;">
+<div style="background:white;padding:20px;border-radius:12px;margin-top:20px;">
 
 @if(count($cart) > 0)
 
     @php $total = 0; @endphp
 
     @foreach($cart as $id => $item)
+        <div style="border-bottom:1px solid #e5e7eb;padding:18px 0;">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+                <div>
+                    <h3 style="margin:0;">{{ $item['name'] }}</h3>
+                    <p style="margin:6px 0 0;color:#4b5563;">Price: TSh {{ number_format($item['price'], 2) }}</p>
+                </div>
 
-        <div style="border-bottom:1px solid #ddd;padding:10px;">
+                <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                    <form method="POST" action="{{ route('cart.decrease', $id) }}">
+                        @csrf
+                        <button type="submit" style="padding:8px 12px;border:none;background:#ef4444;color:white;border-radius:8px;cursor:pointer;">➖</button>
+                    </form>
 
-            <h3>{{ $item['name'] }}</h3>
+                    <strong>{{ $item['quantity'] }}</strong>
 
-            <p>Price: TSh {{ $item['price'] }}</p>
+                    <form method="POST" action="{{ route('cart.increase', $id) }}">
+                        @csrf
+                        <button type="submit" style="padding:8px 12px;border:none;background:#16a34a;color:white;border-radius:8px;cursor:pointer;">➕</button>
+                    </form>
 
-            <div style="display:flex;gap:10px;align-items:center;">
-
-                <a href="/cart/decrease/{{ $id }}">➖</a>
-
-                <b>{{ $item['quantity'] }}</b>
-
-                <a href="/cart/increase/{{ $id }}">➕</a>
-
-                <a href="/cart/remove/{{ $id }}">
-                    <button style="background:red;color:white;padding:5px;border:none;border-radius:5px;">
-                        🗑 Remove
-                    </button>
-                </a>
-
+                    <form method="POST" action="{{ route('cart.remove', $id) }}">
+                        @csrf
+                        <button type="submit" style="padding:8px 12px;border:none;background:#6b7280;color:white;border-radius:8px;cursor:pointer;">🗑 Remove</button>
+                    </form>
+                </div>
             </div>
 
-            @php
-                $total += $item['price'] * $item['quantity'];
-            @endphp
-
+            @php $total += $item['price'] * $item['quantity']; @endphp
         </div>
-
     @endforeach
 
-    <hr>
-
-    <h3>Total: TSh {{ $total }}</h3>
-
-    <button style="background:green;color:white;padding:10px;border:none;border-radius:5px;">
-        Proceed to Checkout
-    </button>
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;margin-top:20px;">
+        <h3 style="margin:0;">Total: TSh {{ number_format($total, 2) }}</h3>
+        <a href="{{ route('checkout') }}" style="background:#10b981;color:white;padding:12px 18px;border-radius:10px;text-decoration:none;">Proceed to Checkout</a>
+    </div>
 
 @else
-
     <p>Your cart is empty 🛒</p>
-
 @endif
 
 </div>
