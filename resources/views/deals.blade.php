@@ -1,6 +1,7 @@
 @extends('layouts.app')
 @section('title', 'Flash deals')
 @section('content')
+{{-- Flash deals listing with shared countdown --}}
 <div class="section-head">
     <div>
         <h1 class="font-display" style="margin:0;">Flash deals</h1>

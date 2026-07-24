@@ -1,6 +1,7 @@
 @extends('layouts.app')
 @section('title', 'Login')
 @section('content')
+{{-- Login form (throttled POST via login.submit) --}}
 <div class="panel" style="max-width:440px;margin:1rem auto;">
     <h1 class="font-display" style="margin-top:0;">Welcome back</h1>
     <p style="color:var(--color-ink-muted);">Sign in to checkout, track orders, and manage your wishlist.</p>
