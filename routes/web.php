@@ -1,8 +1,13 @@
 <?php
 
 /**
- * Route entrypoint: load focused shop + admin route files.
- * Keep this file minimal so domain routing stays discoverable in shop.php / admin.php.
+ * |--------------------------------------------------------------------------
+ * | Web Routes
+ * |--------------------------------------------------------------------------
+ * |
+ * | Load the application's route files.
+ * |
  */
-require __DIR__.'/shop.php';
-require __DIR__.'/admin.php';
+
+require __DIR__ . '/shop.php';
+require __DIR__ . '/admin.php';
