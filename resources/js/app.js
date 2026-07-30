@@ -1,4 +1,3 @@
-<?php
 
 /**
  * Storefront progressive enhancement: hero carousel, flash countdowns,
