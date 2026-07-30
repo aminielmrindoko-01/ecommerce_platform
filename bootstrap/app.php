@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\SetMarketplacePreferences;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -11,7 +12,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        // Apply locale/currency/country view shares on every web request.
+        $middleware->web(append: [
+            SetMarketplacePreferences::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
