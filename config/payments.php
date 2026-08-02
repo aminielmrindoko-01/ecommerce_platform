@@ -212,7 +212,11 @@ return [
             'timeout' => (int) env('PESAPAL_TIMEOUT', 15),
             'base_urls' => [
                 'sandbox' => 'https://cybqa.pesapal.com/pesapalv3',
-                // Production URL intentionally unused in Phase 8A.
+                // Production URL intentionally unused in Phase 8A/8B.
+            ],
+            // Only these hosts may appear in "Continue to PesaPal" links.
+            'allowed_redirect_hosts' => [
+                'cybqa.pesapal.com',
             ],
         ],
     ],

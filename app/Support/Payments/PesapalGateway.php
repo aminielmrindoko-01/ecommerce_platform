@@ -10,10 +10,10 @@ use RuntimeException;
 use Throwable;
 
 /**
- * PesaPal API 3.0 sandbox adapter.
+ * PesaPal API 3.0 sandbox adapter (Phase 8B hardened).
  *
  * Communicates with PesaPal only. Never marks orders paid — PaymentService owns transitions.
- * Phase 8A permits sandbox environment exclusively.
+ * Phase 8A/8B permit sandbox environment exclusively.
  */
 class PesapalGateway implements PaymentGatewayInterface
 {
@@ -35,6 +35,35 @@ class PesapalGateway implements PaymentGatewayInterface
             && (bool) ($config['live_charging'] ?? false)
             && $this->client->isSandboxOnlyAllowed()
             && $this->client->hasCredentials();
+    }
+
+    /**
+     * Allow-list check for provider redirect URLs (sandbox hosts only).
+     */
+    public function isAllowedRedirectUrl(?string $url): bool
+    {
+        if (! is_string($url) || $url === '') {
+            return false;
+        }
+
+        $parts = parse_url($url);
+        if (! is_array($parts)) {
+            return false;
+        }
+
+        $scheme = strtolower((string) ($parts['scheme'] ?? ''));
+        $host = strtolower((string) ($parts['host'] ?? ''));
+
+        if (! in_array($scheme, ['https'], true) || $host === '') {
+            return false;
+        }
+
+        $allowed = array_map(
+            'strtolower',
+            (array) config('payments.gateways.pesapal.allowed_redirect_hosts', ['cybqa.pesapal.com'])
+        );
+
+        return in_array($host, $allowed, true);
     }
 
     public function initializePayment(Order $order, PaymentTransaction $transaction): GatewayInitializationResult
@@ -116,10 +145,11 @@ class PesapalGateway implements PaymentGatewayInterface
             $user = $order->user;
             $shipping = is_array($order->shipping_address) ? $order->shipping_address : [];
 
+            // Decimal-safe: send authoritative money string (no binary float cast).
             $payload = [
                 'id' => $transaction->reference,
                 'currency' => $currency,
-                'amount' => (float) $amount,
+                'amount' => $amount,
                 'description' => substr('Order '.$order->order_number, 0, 100),
                 'callback_url' => $callbackUrl,
                 'notification_id' => $notificationId,
@@ -143,8 +173,22 @@ class PesapalGateway implements PaymentGatewayInterface
             $trackingId = $response['order_tracking_id'] ?? null;
             $redirectUrl = $response['redirect_url'] ?? null;
 
-            if (! is_string($trackingId) || $trackingId === '' || ! is_string($redirectUrl) || $redirectUrl === '') {
-                logger()->warning('pesapal.initialize.missing_payment_url', [
+            if (! is_string($trackingId) || $trackingId === '') {
+                logger()->warning('pesapal.initialize.missing_tracking', [
+                    'order_id' => $order->id,
+                    'reference' => $transaction->reference,
+                ]);
+
+                return GatewayInitializationResult::failed(
+                    $this->key(),
+                    $methodKey,
+                    $methodLabel,
+                    'Unable to start PesaPal checkout right now. No payment has been charged.',
+                );
+            }
+
+            if (! $this->isAllowedRedirectUrl(is_string($redirectUrl) ? $redirectUrl : null)) {
+                logger()->warning('pesapal.initialize.invalid_redirect_host', [
                     'order_id' => $order->id,
                     'reference' => $transaction->reference,
                 ]);
@@ -189,7 +233,7 @@ class PesapalGateway implements PaymentGatewayInterface
                     'live_charging' => true,
                 ],
             );
-        } catch (Throwable $e) {
+        } catch (Throwable) {
             logger()->warning('pesapal.initialize.failed', [
                 'order_id' => $order->id,
                 'reference' => $transaction->reference,
@@ -208,24 +252,30 @@ class PesapalGateway implements PaymentGatewayInterface
     public function verifyPayment(PaymentTransaction $transaction, array $payload): GatewayVerificationResult
     {
         if (! $this->client->isSandboxOnlyAllowed()) {
-            return GatewayVerificationResult::failed('PesaPal production environment is not permitted in Phase 8A.');
+            return GatewayVerificationResult::failed('PesaPal production environment is not permitted in Phase 8A/8B.');
         }
 
         if (! $this->client->hasCredentials()) {
             return GatewayVerificationResult::failed('PesaPal credentials are not configured.');
         }
 
-        $trackingId = $payload['OrderTrackingId']
-            ?? $payload['orderTrackingId']
-            ?? ($transaction->metadata['pesapal']['order_tracking_id'] ?? null);
+        $localTrackingId = $transaction->metadata['pesapal']['order_tracking_id'] ?? null;
+        if (! is_string($localTrackingId) || $localTrackingId === '') {
+            return GatewayVerificationResult::failed('Local PesaPal tracking ID is missing.');
+        }
 
-        if (! is_string($trackingId) || $trackingId === '') {
+        $incomingTrackingId = $payload['OrderTrackingId'] ?? $payload['orderTrackingId'] ?? null;
+        if (! is_string($incomingTrackingId) || $incomingTrackingId === '') {
             return GatewayVerificationResult::failed('Missing PesaPal order tracking id.');
         }
 
+        if (! hash_equals($localTrackingId, $incomingTrackingId)) {
+            return GatewayVerificationResult::failed('PesaPal tracking ID does not match this payment.');
+        }
+
         try {
-            $status = $this->client->getTransactionStatus($trackingId);
-        } catch (RuntimeException $e) {
+            $status = $this->client->getTransactionStatus($localTrackingId);
+        } catch (RuntimeException) {
             logger()->warning('pesapal.verify.failed', [
                 'payment_transaction_id' => $transaction->id,
                 'order_id' => $transaction->order_id,
@@ -235,15 +285,18 @@ class PesapalGateway implements PaymentGatewayInterface
             return GatewayVerificationResult::failed('Unable to verify PesaPal payment status.');
         }
 
-        $merchantReference = (string) ($status['merchant_reference'] ?? '');
-        if ($merchantReference !== '' && $merchantReference !== $transaction->reference) {
+        $merchantReference = $status['merchant_reference'] ?? null;
+        if (! is_string($merchantReference) || trim($merchantReference) === '') {
+            return GatewayVerificationResult::failed('PesaPal merchant reference missing from status response.');
+        }
+
+        if (! hash_equals((string) $transaction->reference, $merchantReference)) {
             return GatewayVerificationResult::failed('PesaPal merchant reference mismatch.');
         }
 
         $amountRaw = $status['amount'] ?? null;
         $currency = strtoupper((string) ($status['currency'] ?? ''));
         $statusCode = (int) ($status['status_code'] ?? 0);
-        $description = strtoupper((string) ($status['payment_status_description'] ?? ''));
 
         if ($amountRaw === null || $amountRaw === '' || $currency === '') {
             return GatewayVerificationResult::failed('PesaPal status missing amount or currency.');
@@ -255,11 +308,12 @@ class PesapalGateway implements PaymentGatewayInterface
             return GatewayVerificationResult::failed('PesaPal status contained a malformed amount.');
         }
 
-        $successful = $statusCode === 1 || $description === 'COMPLETED';
+        // status_code === 1 is the ONLY authoritative success condition.
+        $successful = $statusCode === 1;
 
         return new GatewayVerificationResult(
             successful: $successful,
-            providerReference: $trackingId,
+            providerReference: $localTrackingId,
             amount: $amount,
             currency: $currency,
             metadata: [
@@ -268,7 +322,7 @@ class PesapalGateway implements PaymentGatewayInterface
                 'payment_method' => $status['payment_method'] ?? null,
                 'merchant_reference' => $merchantReference,
             ],
-            failureReason: $successful ? null : ('PesaPal status: '.($status['payment_status_description'] ?? 'not completed')),
+            failureReason: $successful ? null : ('PesaPal status_code='.$statusCode),
         );
     }
 }
