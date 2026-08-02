@@ -15,7 +15,6 @@ use App\Services\PaymentService;
 use App\Services\PesapalPaymentProcessor;
 use App\Support\Payments\GatewayInitializationResult;
 use App\Support\Payments\PesapalGateway;
-use App\Support\Payments\StubPaymentGateway;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Event;
