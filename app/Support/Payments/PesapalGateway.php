@@ -71,6 +71,13 @@ class PesapalGateway implements PaymentGatewayInterface
         $methodKey = (string) ($order->payment_method ?: 'pesapal');
         $methodLabel = (string) config("payments.methods.{$methodKey}.label", 'PesaPal');
 
+        logger()->info('pesapal.initialize.attempted', [
+            'order_id' => $order->id,
+            'payment_transaction_id' => $transaction->id,
+            'reference' => $transaction->reference,
+            'environment' => (string) config('payments.gateways.pesapal.environment', 'sandbox'),
+        ]);
+
         if (! $this->client->isSandboxOnlyAllowed()) {
             logger()->warning('pesapal.initialize.production_rejected', [
                 'order_id' => $order->id,
@@ -86,6 +93,12 @@ class PesapalGateway implements PaymentGatewayInterface
         }
 
         if (! $this->supportsLiveCharging()) {
+            logger()->info('pesapal.initialize.unavailable_coming_soon', [
+                'order_id' => $order->id,
+                'reference' => $transaction->reference,
+                'credentials_configured' => $this->client->hasCredentials(),
+            ]);
+
             return GatewayInitializationResult::comingSoon(
                 $this->key(),
                 $methodKey,
@@ -273,6 +286,13 @@ class PesapalGateway implements PaymentGatewayInterface
             return GatewayVerificationResult::failed('PesaPal tracking ID does not match this payment.');
         }
 
+        logger()->info('pesapal.verify.attempted', [
+            'payment_transaction_id' => $transaction->id,
+            'order_id' => $transaction->order_id,
+            'reference' => $transaction->reference,
+            'provider_tracking' => $localTrackingId,
+        ]);
+
         try {
             $status = $this->client->getTransactionStatus($localTrackingId);
         } catch (RuntimeException) {
@@ -287,10 +307,22 @@ class PesapalGateway implements PaymentGatewayInterface
 
         $merchantReference = $status['merchant_reference'] ?? null;
         if (! is_string($merchantReference) || trim($merchantReference) === '') {
+            logger()->warning('pesapal.verify.rejected', [
+                'payment_transaction_id' => $transaction->id,
+                'order_id' => $transaction->order_id,
+                'reason' => 'missing_merchant_reference',
+            ]);
+
             return GatewayVerificationResult::failed('PesaPal merchant reference missing from status response.');
         }
 
         if (! hash_equals((string) $transaction->reference, $merchantReference)) {
+            logger()->warning('pesapal.verify.rejected', [
+                'payment_transaction_id' => $transaction->id,
+                'order_id' => $transaction->order_id,
+                'reason' => 'merchant_reference_mismatch',
+            ]);
+
             return GatewayVerificationResult::failed('PesaPal merchant reference mismatch.');
         }
 
@@ -310,6 +342,14 @@ class PesapalGateway implements PaymentGatewayInterface
 
         // status_code === 1 is the ONLY authoritative success condition.
         $successful = $statusCode === 1;
+
+        logger()->info($successful ? 'pesapal.verify.status_ok' : 'pesapal.verify.status_not_paid', [
+            'payment_transaction_id' => $transaction->id,
+            'order_id' => $transaction->order_id,
+            'reference' => $transaction->reference,
+            'provider_tracking' => $localTrackingId,
+            'status_code' => $statusCode,
+        ]);
 
         return new GatewayVerificationResult(
             successful: $successful,

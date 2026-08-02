@@ -105,14 +105,15 @@ No API credentials are required. The stub gateway never claims money was receive
 
 | Item | Value |
 |------|--------|
-| Current gateway | Stub / Offline |
-| Status | Coming Soon |
-| Live payment | Not enabled |
+| Current gateway | Stub / Offline (default) |
+| Status | Coming Soon unless local PesaPal sandbox is explicitly enabled |
+| Live / production payment | Not enabled |
+| PesaPal | Sandbox adapter only (Phases 8A–8C) |
 | Env default | `PAYMENT_GATEWAY=stub` |
 
-**Current behavior:** Orders can be created without charging a payment method. Online methods show a clear Coming Soon experience. `payment_status` stays `pending` until a genuine verified `PaymentService` transition (admin/manual today).
+**Current behavior:** Orders can be created without charging a payment method. Online methods show a clear Coming Soon experience unless local PesaPal sandbox credentials + enable flags are configured. `payment_status` stays `pending` until a genuine verified `PaymentService` transition.
 
-**No live payment API is currently connected.**
+**No production payment API is currently connected.**
 
 ### Future activation checklist
 
@@ -128,53 +129,130 @@ No API credentials are required. The stub gateway never claims money was receive
 
 Fail closed: a misconfigured live gateway must fall back to stub/unavailable behavior and must never mark payment as paid.
 
-## Phase 8A — PesaPal Sandbox
+## PesaPal Sandbox Integration
 
-Phase 8A adds a **sandbox-only** `PesapalGateway` adapter. This is **NOT** production payment processing.
+Phases 8A–8C add a **sandbox-only** PesaPal adapter and verification path.
+**Production payment processing is NOT enabled.**
 
 ```text
-Checkout → PaymentGatewayManager → PesapalGateway → PesaPal SANDBOX
-       → IPN/callback → GetTransactionStatus → PaymentService → paid
+Customer → Checkout → Order + PaymentTransaction
+        → PaymentGatewayManager → PesapalGateway → PesapalClient
+        → PesaPal SANDBOX (redirect_url)
+        → IPN / browser callback
+        → local tracking + merchant-reference binding
+        → GetTransactionStatus (server-to-server)
+        → status_code === 1 + amount + currency checks
+        → PaymentService → payment_status = paid
 ```
 
-### Defaults
+### 1. Sandbox-only status
 
-* `PAYMENT_GATEWAY=stub` (unchanged)
-* Without PesaPal credentials / enable flags, customers still see **Coming Soon**
-* Browser return from PesaPal is **not** proof of payment
+* Only `PESAPAL_ENV=sandbox` is permitted
+* `PESAPAL_ENV=production` fail-closes (no production charging)
+* Default storefront gateway remains `PAYMENT_GATEWAY=stub`
+* Without credentials / enable flags, customers see **Coming Soon**
 
-### Enable sandbox (local / staging)
+### 2. Required environment variables
+
+```env
+PAYMENT_GATEWAY=stub
+
+PESAPAL_ENV=sandbox
+PESAPAL_CONSUMER_KEY=
+PESAPAL_CONSUMER_SECRET=
+PESAPAL_IPN_ID=
+PESAPAL_CALLBACK_URL=
+PESAPAL_IPN_URL=
+PESAPAL_TIMEOUT=15
+```
+
+Optional local enablement (never commit real secrets):
 
 ```env
 PAYMENT_GATEWAY=pesapal
 PAYMENT_PESAPAL_ENABLED=true
 PAYMENT_PESAPAL_SANDBOX_CHARGING=true
-PESAPAL_ENV=sandbox
-PESAPAL_CONSUMER_KEY=
-PESAPAL_CONSUMER_SECRET=
 PESAPAL_CALLBACK_URL="${APP_URL}/payments/pesapal/callback"
 PESAPAL_IPN_URL="${APP_URL}/api/payments/pesapal/ipn"
-PESAPAL_TIMEOUT=15
 ```
 
-`PESAPAL_ENV=production` is rejected in Phase 8A (fail closed).
+### 3. Configure local sandbox credentials
 
-### Security rules
+1. Obtain sandbox consumer key/secret from PesaPal.
+2. Put them only in local `.env` (not `.env.example`, git, tests, README, Blade, or logs).
+3. Keep `PESAPAL_ENV=sandbox`.
+4. Optionally set `PESAPAL_IPN_ID` if you already registered an IPN in the sandbox dashboard.
+5. Expose callback/IPN URLs to the sandbox (local tunnel if needed).
 
-* Amount comes from `order.total_price` only
-* Paid transitions only via `PaymentService` after GetTransactionStatus verification
-* Amount + currency must match
-* Provider references remain unique / idempotent
-* Secrets never appear in Blade, JS, logs, or the database
-
-### Tests
+### 4. Start the application
 
 ```bash
-php artisan test --filter=PesapalGatewayTest
-php artisan test
+php artisan migrate
+npm run build
+php artisan serve
 ```
 
-Tests mock PesaPal HTTP calls and do not require internet or real credentials.
+Health check (never prints secrets/tokens):
+
+```bash
+php artisan payments:pesapal-sandbox-check
+php artisan payments:pesapal-sandbox-check --auth
+```
+
+### 5. Test checkout
+
+1. Sign in as a customer, add a product, checkout with **PesaPal**.
+2. Confirmation should show **Continue to PesaPal** (not Payment Successful).
+3. Complete payment using PesaPal’s sandbox test mechanism only.
+4. Return/IPN must still pass server-side verification before `paid`.
+
+### 6. How IPN / callback work
+
+| Endpoint | Route | Notes |
+|----------|-------|--------|
+| IPN | `POST/GET /api/payments/pesapal/ipn` | CSRF-exempt; never trusts payload status alone |
+| Callback | `GET /payments/pesapal/callback` | Browser return is not proof of payment |
+
+Both paths:
+
+1. Load local payment by merchant reference
+2. Require locally stored tracking ID binding
+3. Call `GetTransactionStatus`
+4. Require non-empty matching merchant reference
+5. Require `status_code === 1`, amount, and currency match
+6. Mutate state only through `PaymentService`
+
+`payment_notification_receipts` provides replay/audit idempotency and is **not** payment authority.
+
+### 7. Inspect payment status
+
+* Customer: order confirmation / account order page payment panel
+* Admin: admin order payment panel + payment status history
+* DB: `orders.payment_status`, `payment_transactions`, `payment_status_histories`, `payment_notification_receipts`
+
+### 8. Safely disable PesaPal
+
+```env
+PAYMENT_GATEWAY=stub
+PAYMENT_PESAPAL_ENABLED=false
+PAYMENT_PESAPAL_SANDBOX_CHARGING=false
+```
+
+Or remove credentials. Checkout returns to Coming Soon / stub behavior; no charge is attempted.
+
+### 9. Remove sandbox credentials
+
+Clear from local `.env`:
+
+```env
+PESAPAL_CONSUMER_KEY=
+PESAPAL_CONSUMER_SECRET=
+PESAPAL_IPN_ID=
+```
+
+Rotate any key that may have been exposed. Never commit replacements.
+
+### 10. Production payments are NOT enabled
 
 ```text
 NO PRODUCTION PAYMENT PROCESSING
@@ -182,6 +260,41 @@ NO REAL-MONEY CHARGING
 NO PRODUCTION CREDENTIALS
 SANDBOX ONLY
 ```
+
+### Automated vs real sandbox tests
+
+**Offline (default CI / `php artisan test`)** — HTTP fakes only:
+
+```bash
+php artisan test --filter=Pesapal
+php artisan test
+```
+
+**Real sandbox (opt-in, credentials required)** — not part of the default suite:
+
+```bash
+PESAPAL_E2E=true php artisan test tests/Sandbox
+```
+
+If credentials are absent, real sandbox checks report:
+
+```text
+NOT EXECUTED — SANDBOX CREDENTIALS/PROVIDER TEST ENVIRONMENT UNAVAILABLE
+```
+
+Do not treat HTTP-fake tests as real sandbox E2E success.
+
+### Security rules (Phase 8B preserved)
+
+* Tracking ID strictly bound to local payment metadata
+* Merchant reference strictly bound (`hash_equals`, empty rejected)
+* Amount from `PaymentService::authoritativeAmount()`
+* Currency from payment configuration
+* `status_code === 1` is the only paid success condition
+* Foreign/unbound FAILED notifications cannot terminalize orders
+* Redirect hosts allow-listed (`cybqa.pesapal.com`)
+* Duplicate IPNs idempotent
+* Secrets never in Blade, JS, logs, DB records, tests, or git
 
 ## Technology Stack
 

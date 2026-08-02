@@ -26,13 +26,19 @@ class PesapalPaymentProcessor
      * Independently verify a PesaPal notification and apply PaymentService transitions.
      *
      * @param  array<string, mixed>  $payload
-     * @return array{ok: bool, order: ?Order, payment_status: ?string, message: string}
+     * @return array{ok: bool, order: ?Order, payment_status: ?string, message: string, duplicate?: bool}
      */
     public function processNotification(array $payload): array
     {
         $merchantReference = trim((string) ($payload['OrderMerchantReference'] ?? $payload['orderMerchantReference'] ?? ''));
         $trackingId = trim((string) ($payload['OrderTrackingId'] ?? $payload['orderTrackingId'] ?? ''));
         $notificationType = trim((string) ($payload['OrderNotificationType'] ?? $payload['orderNotificationType'] ?? 'IPNCHANGE'));
+
+        logger()->info('pesapal.notification.received', [
+            'notification_type' => $notificationType !== '' ? $notificationType : null,
+            'merchant_reference' => $merchantReference !== '' ? $merchantReference : null,
+            'provider_tracking' => $trackingId !== '' ? $trackingId : null,
+        ]);
 
         if ($merchantReference === '' || $trackingId === '') {
             logger()->warning('pesapal.callback.invalid', ['reason' => 'missing_identifiers']);
@@ -45,11 +51,19 @@ class PesapalPaymentProcessor
         if (! $shouldProcess) {
             $existing = PaymentTransaction::query()->where('reference', $merchantReference)->first();
 
+            logger()->info('pesapal.notification.duplicate', [
+                'merchant_reference' => $merchantReference,
+                'provider_tracking' => $trackingId,
+                'notification_type' => $notificationType,
+                'receipt_status' => $receipt->processing_status,
+            ]);
+
             return [
                 'ok' => true,
                 'order' => $existing?->order,
                 'payment_status' => $existing?->order?->payment_status,
                 'message' => 'Notification already processed.',
+                'duplicate' => true,
             ];
         }
 

@@ -8,9 +8,9 @@ use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
 /**
- * Low-level PesaPal API 3.0 HTTP client (sandbox only in Phase 8A).
+ * Low-level PesaPal API 3.0 HTTP client (sandbox only in Phase 8A–8C).
  *
- * Never logs consumer secrets or bearer tokens.
+ * Never logs consumer secrets, bearer tokens, or Authorization headers.
  */
 class PesapalClient
 {
@@ -43,12 +43,41 @@ class PesapalClient
     public function baseUrl(): string
     {
         if (! $this->isSandboxOnlyAllowed()) {
-            throw new RuntimeException('PesaPal production environment is not permitted in Phase 8A.');
+            throw new RuntimeException('PesaPal production environment is not permitted in Phase 8A/8B/8C.');
         }
 
         $url = (string) ($this->cfg()['base_urls']['sandbox'] ?? 'https://cybqa.pesapal.com/pesapalv3');
 
         return rtrim($url, '/');
+    }
+
+    /**
+     * Safe readiness summary for operators (never includes secrets).
+     *
+     * @return array{
+     *     environment: string,
+     *     sandbox_only_allowed: bool,
+     *     credentials_configured: bool,
+     *     enabled: bool,
+     *     live_charging_flag: bool,
+     *     configured_ipn_id: bool,
+     *     base_url: string|null
+     * }
+     */
+    public function sandboxStatus(): array
+    {
+        $cfg = $this->cfg();
+        $sandboxAllowed = $this->isSandboxOnlyAllowed();
+
+        return [
+            'environment' => $this->environment(),
+            'sandbox_only_allowed' => $sandboxAllowed,
+            'credentials_configured' => $this->hasCredentials(),
+            'enabled' => (bool) ($cfg['enabled'] ?? false),
+            'live_charging_flag' => (bool) ($cfg['live_charging'] ?? false),
+            'configured_ipn_id' => filled($cfg['ipn_id'] ?? null),
+            'base_url' => $sandboxAllowed ? $this->baseUrl() : null,
+        ];
     }
 
     public function timeout(): int
@@ -66,7 +95,7 @@ class PesapalClient
         }
 
         if (! $this->isSandboxOnlyAllowed()) {
-            throw new RuntimeException('PesaPal production environment is not permitted in Phase 8A.');
+            throw new RuntimeException('PesaPal production environment is not permitted in Phase 8A/8B/8C.');
         }
 
         $cacheKey = 'pesapal.sandbox.access_token';
@@ -87,20 +116,34 @@ class PesapalClient
                     'consumer_secret' => (string) $cfg['consumer_secret'],
                 ]);
         } catch (ConnectionException) {
+            logger()->warning('pesapal.auth.connection_failed', [
+                'environment' => $this->environment(),
+            ]);
             throw new RuntimeException('PesaPal authentication timed out or connection failed.');
         }
 
         if (! $response->successful()) {
+            // Never log response bodies (may echo credential-related errors).
+            logger()->warning('pesapal.auth.failed', [
+                'environment' => $this->environment(),
+                'http_status' => $response->status(),
+            ]);
             throw new RuntimeException('PesaPal authentication failed.');
         }
 
         $payload = $response->json();
         if (! is_array($payload)) {
+            logger()->warning('pesapal.auth.malformed', [
+                'environment' => $this->environment(),
+            ]);
             throw new RuntimeException('PesaPal authentication returned a malformed response.');
         }
 
         $token = $payload['token'] ?? null;
         if (! is_string($token) || $token === '') {
+            logger()->warning('pesapal.auth.missing_token', [
+                'environment' => $this->environment(),
+            ]);
             throw new RuntimeException('PesaPal authentication response missing token.');
         }
 
@@ -111,11 +154,21 @@ class PesapalClient
 
         Cache::put($cacheKey, $result, now()->addMinutes(4));
 
+        logger()->info('pesapal.auth.success', [
+            'environment' => $this->environment(),
+            'cached_minutes' => 4,
+        ]);
+
         return $result;
     }
 
     public function registerIpn(string $ipnUrl, string $method = 'POST'): string
     {
+        $configured = $this->cfg()['ipn_id'] ?? null;
+        if (is_string($configured) && trim($configured) !== '') {
+            return trim($configured);
+        }
+
         $token = $this->requestToken()['token'];
         $cacheKey = 'pesapal.sandbox.ipn_id.'.sha1($ipnUrl.'|'.$method);
 
@@ -138,6 +191,9 @@ class PesapalClient
         }
 
         if (! $response->successful()) {
+            logger()->warning('pesapal.ipn_register.failed', [
+                'http_status' => $response->status(),
+            ]);
             throw new RuntimeException('PesaPal IPN registration failed.');
         }
 
@@ -149,6 +205,10 @@ class PesapalClient
         }
 
         Cache::put($cacheKey, $ipnId, now()->addDay());
+
+        logger()->info('pesapal.ipn_register.success', [
+            'ipn_url_host' => parse_url($ipnUrl, PHP_URL_HOST),
+        ]);
 
         return $ipnId;
     }
