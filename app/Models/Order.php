@@ -5,22 +5,34 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
- * Buyer order header: totals, status lifecycle, payment/shipping snapshot.
+ * Buyer order header: totals, admin status, payment status, shipping snapshot.
  *
- * `shipping_address` is JSON so historical addresses survive address-book edits.
- * Status enum values: pending, paid, shipped, completed.
+ * `orders.status` remains the legacy admin/order lifecycle.
+ * `orders.payment_status` is the dedicated payment state machine.
  *
  * @package App\Models
  */
 class Order extends Model
 {
+    public const PAYMENT_STATUSES = [
+        'pending',
+        'processing',
+        'paid',
+        'failed',
+        'cancelled',
+        'refunded',
+        'partially_refunded',
+    ];
+
     protected $fillable = [
         'order_number',
         'user_id',
         'total_price',
         'status',
+        'payment_status',
         'payment_method',
         'shipping_method',
         'shipping_cost',
@@ -52,6 +64,16 @@ class Order extends Model
     public function items(): HasMany
     {
         return $this->hasMany(OrderItem::class);
+    }
+
+    public function paymentTransactions(): HasMany
+    {
+        return $this->hasMany(PaymentTransaction::class);
+    }
+
+    public function latestPaymentTransaction(): HasOne
+    {
+        return $this->hasOne(PaymentTransaction::class)->latestOfMany();
     }
 
     /**

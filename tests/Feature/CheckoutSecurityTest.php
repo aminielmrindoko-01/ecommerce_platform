@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\User;
+use App\Services\CheckoutIdempotencyService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Support\CreatesMarketplace;
 use Tests\TestCase;
@@ -14,32 +15,45 @@ class CheckoutSecurityTest extends TestCase
     use CreatesMarketplace;
     use RefreshDatabase;
 
+    /**
+     * @param  array<string, mixed>  $cart
+     * @param  array<string, mixed>  $payload
+     */
+    protected function placeCheckout(User $user, array $cart, array $payload, ?string $token = null)
+    {
+        $token ??= app(CheckoutIdempotencyService::class)->issue($user);
+
+        return $this->actingAs($user)
+            ->withSession([
+                'cart' => $cart,
+            ])
+            ->post(route('checkout.place'), array_merge($payload, [
+                'checkout_token' => $token,
+            ]));
+    }
+
     public function test_checkout_uses_database_price_not_session_price(): void
     {
         $user = User::factory()->create();
         [, $vendor] = $this->createVendorUser();
         $product = $this->createProductForVendor($vendor, ['price' => 50000, 'stock' => 5, 'name' => 'Checkout Item']);
 
-        $response = $this->actingAs($user)
-            ->withSession([
-                'cart' => [
-                    $product->id => [
-                        'name' => $product->name,
-                        'price' => 1,
-                        'quantity' => 2,
-                        'image' => null,
-                        'brand' => null,
-                    ],
-                ],
-            ])
-            ->post(route('checkout.place'), [
-                'full_name' => 'Buyer One',
-                'phone' => '+255700000100',
-                'line1' => '12 Market Street',
-                'city' => 'Dar es Salaam',
-                'payment_method' => 'cod',
-                'shipping_method' => 'pickup',
-            ]);
+        $response = $this->placeCheckout($user, [
+            $product->id => [
+                'name' => $product->name,
+                'price' => 1,
+                'quantity' => 2,
+                'image' => null,
+                'brand' => null,
+            ],
+        ], [
+            'full_name' => 'Buyer One',
+            'phone' => '+255700000100',
+            'line1' => '12 Market Street',
+            'city' => 'Dar es Salaam',
+            'payment_method' => 'cod',
+            'shipping_method' => 'pickup',
+        ]);
 
         $order = Order::first();
         $this->assertNotNull($order);
@@ -48,6 +62,8 @@ class CheckoutSecurityTest extends TestCase
         $this->assertEquals(118000.0, (float) $order->total_price);
         $this->assertEquals(50000.0, (float) $order->items()->first()->price);
         $this->assertEquals(3, $product->fresh()->stock);
+        $this->assertSame('pending', $order->payment_status);
+        $this->assertNotNull($order->latestPaymentTransaction);
     }
 
     public function test_checkout_rejects_insufficient_stock(): void
@@ -56,26 +72,22 @@ class CheckoutSecurityTest extends TestCase
         [, $vendor] = $this->createVendorUser();
         $product = $this->createProductForVendor($vendor, ['price' => 20000, 'stock' => 1]);
 
-        $response = $this->actingAs($user)
-            ->withSession([
-                'cart' => [
-                    $product->id => [
-                        'name' => $product->name,
-                        'price' => 20000,
-                        'quantity' => 5,
-                        'image' => null,
-                        'brand' => null,
-                    ],
-                ],
-            ])
-            ->post(route('checkout.place'), [
-                'full_name' => 'Buyer Two',
-                'phone' => '+255700000101',
-                'line1' => '12 Market Street',
-                'city' => 'Dar es Salaam',
-                'payment_method' => 'cod',
-                'shipping_method' => 'pickup',
-            ]);
+        $response = $this->placeCheckout($user, [
+            $product->id => [
+                'name' => $product->name,
+                'price' => 20000,
+                'quantity' => 5,
+                'image' => null,
+                'brand' => null,
+            ],
+        ], [
+            'full_name' => 'Buyer Two',
+            'phone' => '+255700000101',
+            'line1' => '12 Market Street',
+            'city' => 'Dar es Salaam',
+            'payment_method' => 'cod',
+            'shipping_method' => 'pickup',
+        ]);
 
         $response->assertRedirect(route('cart.index'));
         $this->assertSame(0, Order::count());
@@ -87,6 +99,7 @@ class CheckoutSecurityTest extends TestCase
         $user = User::factory()->create();
         [, $vendor] = $this->createVendorUser();
         $product = $this->createProductForVendor($vendor);
+        $token = app(CheckoutIdempotencyService::class)->issue($user);
 
         $this->actingAs($user)
             ->withSession([
@@ -108,6 +121,7 @@ class CheckoutSecurityTest extends TestCase
                 'city' => 'Dar es Salaam',
                 'payment_method' => 'not-a-real-gateway',
                 'shipping_method' => 'pickup',
+                'checkout_token' => $token,
             ])
             ->assertSessionHasErrors('payment_method');
 
@@ -126,6 +140,7 @@ class CheckoutSecurityTest extends TestCase
             'user_id' => $owner->id,
             'total_price' => 1000,
             'status' => 'pending',
+            'payment_status' => 'pending',
             'payment_method' => 'cod',
             'shipping_method' => 'pickup',
         ]);

@@ -17,6 +17,8 @@ use App\Models\Coupon;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
+use App\Services\CheckoutIdempotencyService;
+use App\Services\PaymentService;
 use App\Support\Marketplace;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -24,6 +26,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use InvalidArgumentException;
 
 /**
  * Checkout form, transactional order creation, and confirmation page.
@@ -156,6 +159,8 @@ class CheckoutController extends Controller
         $phonePrefix = Marketplace::countries()[Marketplace::country()]['phone'] ?? '+255';
         $shippingRegion = Marketplace::shippingRegions()[Marketplace::countries()[Marketplace::country()]['shipping']] ?? 'East Africa';
 
+        $checkoutToken = app(CheckoutIdempotencyService::class)->issue(auth()->id());
+
         return view('checkout', compact(
             'cart',
             'addresses',
@@ -169,7 +174,8 @@ class CheckoutController extends Controller
             'couponCode',
             'paymentMethods',
             'phonePrefix',
-            'shippingRegion'
+            'shippingRegion',
+            'checkoutToken'
         ));
     }
 
@@ -177,10 +183,14 @@ class CheckoutController extends Controller
      * Create order + items in a DB transaction, optionally save address, clear cart.
      *
      * Side effects: locks product rows, decrements stock, increments sold_count.
+     * Checkout token consumption is atomic with order creation (lockForUpdate).
      * Rate-limited at the route layer (throttle:10,1).
      */
-    public function place(Request $request): RedirectResponse
-    {
+    public function place(
+        Request $request,
+        PaymentService $payments,
+        CheckoutIdempotencyService $checkoutIds
+    ): RedirectResponse {
         $sessionCart = session('cart', []);
 
         if (empty($sessionCart)) {
@@ -199,10 +209,16 @@ class CheckoutController extends Controller
             'payment_method' => ['required', 'string', Rule::in($paymentKeys)],
             'shipping_method' => 'required|in:standard,express,pickup',
             'save_address' => 'nullable|boolean',
+            'checkout_token' => 'required|string|max:64',
         ]);
 
         try {
-            $order = DB::transaction(function () use ($sessionCart, $data) {
+            $order = DB::transaction(function () use ($sessionCart, $data, $checkoutIds) {
+                $idempotencyKey = $checkoutIds->lockConsumable(
+                    $data['checkout_token'],
+                    (int) auth()->id()
+                );
+
                 $lines = [];
                 $subtotal = 0.0;
 
@@ -270,6 +286,7 @@ class CheckoutController extends Controller
                     'user_id' => auth()->id(),
                     'total_price' => $total,
                     'status' => 'pending',
+                    'payment_status' => 'pending',
                     'payment_method' => $data['payment_method'],
                     'shipping_method' => $data['shipping_method'],
                     'shipping_cost' => $shipping,
@@ -302,13 +319,25 @@ class CheckoutController extends Controller
                     $product->increment('sold_count', $line['quantity']);
                 }
 
+                $checkoutIds->markConsumed($idempotencyKey, (int) $order->id);
+
                 return $order;
             });
+        } catch (InvalidArgumentException $e) {
+            if (str_contains($e->getMessage(), 'already processed')) {
+                return redirect()
+                    ->route('account.orders')
+                    ->with('success', 'Your order was already placed. No duplicate order was created.');
+            }
+
+            return redirect()->route('checkout')->with('error', $e->getMessage());
         } catch (\RuntimeException $e) {
             return redirect()->route('cart.index')->with('error', $e->getMessage());
         }
 
         session()->forget(['cart', 'coupon_code']);
+
+        $payments->ensurePendingTransaction($order, 'stub');
 
         OrderPlaced::dispatch($order->load('items.product.vendor.user'));
 
@@ -323,7 +352,7 @@ class CheckoutController extends Controller
     {
         abort_unless($order->user_id === auth()->id() || auth()->user()?->isAdmin(), 403);
 
-        $order->load('items.product');
+        $order->load(['items.product', 'latestPaymentTransaction']);
 
         return view('checkout-confirmation', compact('order'));
     }

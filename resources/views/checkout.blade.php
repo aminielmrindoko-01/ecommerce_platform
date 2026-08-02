@@ -13,6 +13,7 @@
 
 <form method="POST" action="{{ route('checkout.place') }}" style="display:grid;grid-template-columns:1.4fr .9fr;gap:1.25rem;align-items:start;">
     @csrf
+    <input type="hidden" name="checkout_token" value="{{ $checkoutToken }}">
     <div style="display:grid;gap:1rem;">
         {{-- Delivery address (saved chips prefill via inline script) --}}
         <section class="panel">

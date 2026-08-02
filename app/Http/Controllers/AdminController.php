@@ -11,6 +11,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\Admin\UpdateOrderItemFulfillmentRequest;
+use App\Http\Requests\Admin\UpdateOrderPaymentRequest;
 use App\Models\Category;
 use App\Models\Coupon;
 use App\Models\Order;
@@ -21,6 +22,7 @@ use App\Models\User;
 use App\Models\Vendor;
 use App\Services\OrderFulfillmentSummary;
 use App\Services\OrderItemFulfillmentService;
+use App\Services\PaymentService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -160,16 +162,20 @@ class AdminController extends Controller
         return back()->with('success', 'User role updated successfully.');
     }
 
-    public function orders(OrderFulfillmentSummary $summary, OrderItemFulfillmentService $fulfillment): View
-    {
+    public function orders(
+        OrderFulfillmentSummary $summary,
+        OrderItemFulfillmentService $fulfillment,
+        PaymentService $payments
+    ): View {
         $orders = Order::with([
             'user',
             'items.product.vendor',
+            'latestPaymentTransaction',
         ])
             ->latest()
             ->paginate(20);
 
-        $orders->getCollection()->transform(function (Order $order) use ($summary, $fulfillment) {
+        $orders->getCollection()->transform(function (Order $order) use ($summary, $fulfillment, $payments) {
             $order->setAttribute('fulfillment_summary', $summary->summarize($order));
             $order->setAttribute('fulfillment_summary_label', $summary->label($order->fulfillment_summary));
 
@@ -179,18 +185,51 @@ class AdminController extends Controller
             }
             $order->setAttribute('admin_allowed_by_item', $allowedByItem);
 
+            $paymentStatus = $order->payment_status ?: 'pending';
+            $order->setAttribute('admin_allowed_payments', $payments->allowedTransitions($paymentStatus));
+
             return $order;
         });
 
         return view('admin.orders', compact('orders'));
     }
 
+    /**
+     * Controlled admin payment foundation transition (manual/stub).
+     */
+    public function updateOrderPayment(
+        UpdateOrderPaymentRequest $request,
+        Order $order,
+        PaymentService $payments
+    ): RedirectResponse {
+        try {
+            $payments->transitionOrderPayment(
+                $order,
+                $request->validated('payment_status'),
+                $request->user(),
+                $request->validated('reason'),
+                'manual',
+                $request->validated('provider_reference')
+            );
+        } catch (InvalidArgumentException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return back()->with('success', 'Payment status updated.');
+    }
+
+    /**
+     * Update legacy coarse order lifecycle only.
+     *
+     * Payment "paid" must go through PaymentService / updateOrderPayment.
+     * `paid` is intentionally excluded from this endpoint.
+     */
     public function updateOrderStatus(Request $request, $id): RedirectResponse
     {
         $order = Order::findOrFail($id);
 
         $request->validate([
-            'status' => 'required|in:pending,paid,shipped,completed',
+            'status' => 'required|in:pending,shipped,completed',
         ]);
 
         $order->status = $request->status;
