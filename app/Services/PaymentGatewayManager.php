@@ -6,15 +6,20 @@ use App\Contracts\PaymentGatewayInterface;
 use App\Models\Order;
 use App\Models\PaymentTransaction;
 use App\Support\Payments\GatewayInitializationResult;
+use App\Support\Payments\PaymentStatusPresenter;
 use App\Support\Payments\StubPaymentGateway;
 use Illuminate\Contracts\Container\Container;
 use InvalidArgumentException;
+use Throwable;
 
 /**
  * Resolves configured payment gateways for checkout methods.
  *
- * Phase 7A: live charging is disabled for every provider. Selection falls back
- * to the non-charging stub / coming-soon driver.
+ * Fail closed: missing/misconfigured live drivers fall back to the non-charging
+ * stub. Never marks an order paid and never performs live charges in Phase 7B.
+ *
+ * Future extension points (not registered yet):
+ * mpesa, airtel, tigo, stripe, paypal drivers implementing PaymentGatewayInterface.
  */
 class PaymentGatewayManager
 {
@@ -23,7 +28,7 @@ class PaymentGatewayManager
     ) {}
 
     /**
-     * @return array<string, array{key: string, label: string, gateway: string, offline: bool, live_charging: bool, coming_soon: bool, badge: string}>
+     * @return array<string, array{key: string, label: string, gateway: string, offline: bool, group: string, live_charging: bool, coming_soon: bool, available: bool, badge: string, gateway_display: string}>
      */
     public function checkoutMethods(): array
     {
@@ -45,7 +50,7 @@ class PaymentGatewayManager
     }
 
     /**
-     * @return array{key: string, label: string, gateway: string, offline: bool, live_charging: bool, coming_soon: bool, badge: string}
+     * @return array{key: string, label: string, gateway: string, offline: bool, group: string, live_charging: bool, coming_soon: bool, available: bool, badge: string, gateway_display: string}
      */
     public function describeMethod(string $method): array
     {
@@ -56,6 +61,7 @@ class PaymentGatewayManager
         $label = (string) config("payments.methods.{$method}.label", $method);
         $gateway = (string) config("payments.methods.{$method}.gateway", 'stub');
         $offline = (bool) config("payments.methods.{$method}.offline", false);
+        $group = (string) config("payments.methods.{$method}.group", $offline ? 'offline' : 'online');
         $live = $this->isLiveChargingConfigured($method);
 
         return [
@@ -63,9 +69,12 @@ class PaymentGatewayManager
             'label' => $label,
             'gateway' => $gateway,
             'offline' => $offline,
+            'group' => $group,
             'live_charging' => $live,
             'coming_soon' => ! $live && ! $offline,
+            'available' => $live,
             'badge' => $live ? 'Available' : ($offline ? 'Offline' : 'Coming soon'),
+            'gateway_display' => PaymentStatusPresenter::gatewayDisplayName($gateway),
         ];
     }
 
@@ -81,6 +90,12 @@ class PaymentGatewayManager
         }
 
         $gatewayKey = (string) config("payments.methods.{$method}.gateway", 'stub');
+
+        return $this->gatewayAllowsLiveCharging($gatewayKey);
+    }
+
+    public function gatewayAllowsLiveCharging(string $gatewayKey): bool
+    {
         $gateway = config("payments.gateways.{$gatewayKey}");
 
         if (! is_array($gateway)) {
@@ -91,11 +106,24 @@ class PaymentGatewayManager
             && (bool) ($gateway['live_charging'] ?? false);
     }
 
-    public function default(): PaymentGatewayInterface
+    public function activeGatewayKey(): string
     {
-        return $this->resolve((string) config('payments.default', 'stub'));
+        return (string) config('payments.default', 'stub');
     }
 
+    public function activeGatewayDisplayName(): string
+    {
+        return PaymentStatusPresenter::gatewayDisplayName($this->activeGatewayKey());
+    }
+
+    public function default(): PaymentGatewayInterface
+    {
+        return $this->resolveOrStub($this->activeGatewayKey());
+    }
+
+    /**
+     * Strict resolve — unknown keys throw. Use resolveOrStub() for checkout safety.
+     */
     public function resolve(string $gatewayKey): PaymentGatewayInterface
     {
         $config = config("payments.gateways.{$gatewayKey}");
@@ -104,18 +132,38 @@ class PaymentGatewayManager
             throw new InvalidArgumentException('Unknown payment gateway.');
         }
 
-        // Live drivers are not registered in Phase 7A. Always use the stub
-        // when live charging is not explicitly enabled.
-        if (! ($config['enabled'] ?? false) || ! ($config['live_charging'] ?? false)) {
-            return $this->container->make(StubPaymentGateway::class);
+        if (! $this->gatewayAllowsLiveCharging($gatewayKey)) {
+            return $this->stub();
         }
 
         $driver = (string) ($config['driver'] ?? $gatewayKey);
 
         return match ($driver) {
-            'stub' => $this->container->make(StubPaymentGateway::class),
+            'stub' => $this->stub(),
+            // Future: 'mpesa' => $this->container->make(MpesaGateway::class),
+            // Future: 'airtel' => $this->container->make(AirtelMoneyGateway::class),
+            // Future: 'tigo' => $this->container->make(TigoPesaGateway::class),
+            // Future: 'stripe' => $this->container->make(StripeGateway::class),
+            // Future: 'paypal' => $this->container->make(PayPalGateway::class),
             default => throw new InvalidArgumentException('Payment gateway driver is not available.'),
         };
+    }
+
+    /**
+     * Fail-closed resolve for customer checkout paths.
+     */
+    public function resolveOrStub(string $gatewayKey): PaymentGatewayInterface
+    {
+        try {
+            return $this->resolve($gatewayKey);
+        } catch (Throwable $e) {
+            logger()->warning('payment.gateway.resolve_fallback_stub', [
+                'gateway' => $gatewayKey,
+                'reason' => 'unavailable_or_misconfigured',
+            ]);
+
+            return $this->stub();
+        }
     }
 
     public function resolveForMethod(string $method): PaymentGatewayInterface
@@ -131,28 +179,59 @@ class PaymentGatewayManager
 
     /**
      * Initialize payment UI state for an order. Never marks payment as paid.
+     * Fail closed on unexpected errors — payment remains pending.
      */
     public function initialize(Order $order, PaymentTransaction $transaction): GatewayInitializationResult
     {
         $method = (string) ($order->payment_method ?: '');
+        $methodLabel = $method !== '' && $this->hasMethod($method)
+            ? (string) config("payments.methods.{$method}.label", $method)
+            : 'Selected method';
 
-        if ($method === '' || ! $this->hasMethod($method)) {
-            // Safe fallback — still non-charging.
-            $gateway = $this->default();
-        } else {
-            $gateway = $this->resolveForMethod($method);
+        try {
+            if ($method === '' || ! $this->hasMethod($method)) {
+                $gateway = $this->default();
+            } else {
+                $gatewayKey = (string) config("payments.methods.{$method}.gateway", 'stub');
+                $gateway = $this->resolveOrStub($gatewayKey);
+            }
+
+            $result = $gateway->initializePayment($order, $transaction);
+
+            logger()->info('payment.gateway.initialized', [
+                'gateway' => $gateway->key(),
+                'order_id' => $order->id,
+                'reference' => $transaction->reference,
+                'status' => $result->status,
+                'live_charging' => $gateway->supportsLiveCharging(),
+            ]);
+
+            return $result;
+        } catch (Throwable) {
+            logger()->warning('payment.gateway.initialize_failed_closed', [
+                'order_id' => $order->id,
+                'reference' => $transaction->reference,
+                'method' => $method,
+            ]);
+
+            return GatewayInitializationResult::unavailable(
+                'stub',
+                $method !== '' ? $method : 'unknown',
+                $methodLabel,
+                'Online payment is currently unavailable. Your order is saved and no payment has been charged.',
+                [
+                    'reference' => $transaction->reference,
+                    'amount' => (string) $transaction->amount,
+                    'currency' => $transaction->currency,
+                    'mode' => 'unavailable',
+                    'live_charging' => false,
+                ],
+            );
         }
+    }
 
-        $result = $gateway->initializePayment($order, $transaction);
-
-        logger()->info('payment.gateway.initialized', [
-            'gateway' => $gateway->key(),
-            'order_id' => $order->id,
-            'reference' => $transaction->reference,
-            'status' => $result->status,
-            'live_charging' => $gateway->supportsLiveCharging(),
-        ]);
-
-        return $result;
+    protected function stub(): StubPaymentGateway
+    {
+        return $this->container->make(StubPaymentGateway::class);
     }
 }

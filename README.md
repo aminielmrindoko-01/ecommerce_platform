@@ -101,6 +101,33 @@ Phase 7A adds:
 
 No API credentials are required. The stub gateway never claims money was received. Future drivers (`MpesaGateway`, `StripeGateway`, etc.) will implement the same `PaymentGatewayInterface` without rewriting checkout.
 
+## Payment Gateway Status
+
+| Item | Value |
+|------|--------|
+| Current gateway | Stub / Offline |
+| Status | Coming Soon |
+| Live payment | Not enabled |
+| Env default | `PAYMENT_GATEWAY=stub` |
+
+**Current behavior:** Orders can be created without charging a payment method. Online methods show a clear Coming Soon experience. `payment_status` stays `pending` until a genuine verified `PaymentService` transition (admin/manual today).
+
+**No live payment API is currently connected.**
+
+### Future activation checklist
+
+1. Implement the approved gateway adapter (`PaymentGatewayInterface`).
+2. Configure environment variables (never commit secrets).
+3. Configure the webhook endpoint.
+4. Configure webhook signature verification.
+5. Test sandbox payments.
+6. Run security verification (IDOR, amount, idempotency, state machine).
+7. Enable the gateway (`enabled` + `live_charging`).
+8. Monitor transactions and audit history.
+9. Only then enable production charging.
+
+Fail closed: a misconfigured live gateway must fall back to stub/unavailable behavior and must never mark payment as paid.
+
 ## Technology Stack
 
 * PHP 8.2+

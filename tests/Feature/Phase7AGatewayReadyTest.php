@@ -63,7 +63,7 @@ class Phase7AGatewayReadyTest extends TestCase
             ->assertOk()
             ->assertSee('Payment Service Coming Soon')
             ->assertSee('M-Pesa')
-            ->assertSee('Coming soon')
+            ->assertSee('Coming Soon')
             ->assertDontSee('Payment successful')
             ->assertDontSee('Transaction successful');
     }
@@ -128,7 +128,8 @@ class Phase7AGatewayReadyTest extends TestCase
             ->get(route('checkout.confirmation', $order))
             ->assertOk()
             ->assertSee('Payment Service Coming Soon')
-            ->assertSee('pending', false);
+            ->assertSee('Payment status')
+            ->assertDontSee('Payment Successful');
 
         $this->assertSame('pending', $order->fresh()->payment_status);
     }
@@ -321,9 +322,9 @@ class Phase7AGatewayReadyTest extends TestCase
             ])
             ->get(route('checkout'))
             ->assertOk()
-            ->assertSee('Coming soon')
+            ->assertSee('Coming Soon')
             ->assertSee('M-Pesa')
-            ->assertSee('Payment service coming soon')
-            ->assertDontSee('Payment successful');
+            ->assertSee('Online payment is currently unavailable')
+            ->assertDontSee('Payment Successful');
     }
 }
