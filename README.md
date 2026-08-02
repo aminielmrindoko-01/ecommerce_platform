@@ -105,14 +105,15 @@ No API credentials are required. The stub gateway never claims money was receive
 
 | Item | Value |
 |------|--------|
-| Current gateway | Stub / Offline |
-| Status | Coming Soon |
-| Live payment | Not enabled |
+| Current gateway | Stub / Offline (default) |
+| Status | Coming Soon unless local PesaPal sandbox is explicitly enabled |
+| Live / production payment | Not enabled |
+| PesaPal | Sandbox adapter only (Phases 8A–8C) |
 | Env default | `PAYMENT_GATEWAY=stub` |
 
-**Current behavior:** Orders can be created without charging a payment method. Online methods show a clear Coming Soon experience. `payment_status` stays `pending` until a genuine verified `PaymentService` transition (admin/manual today).
+**Current behavior:** Orders can be created without charging a payment method. Online methods show a clear Coming Soon experience unless local PesaPal sandbox credentials + enable flags are configured. `payment_status` stays `pending` until a genuine verified `PaymentService` transition.
 
-**No live payment API is currently connected.**
+**No production payment API is currently connected.**
 
 ### Future activation checklist
 
