@@ -52,13 +52,27 @@ class AccountController extends Controller
 
     /**
      * Single order detail — owner only.
+     * Items are grouped by vendor for multi-vendor fulfillment visibility.
      */
     public function showOrder(Order $order): View
     {
         abort_unless($order->user_id === auth()->id(), 403);
-        $order->load('items.product');
+        $order->load(['items.product.vendor']);
 
-        return view('account.order-show', compact('order'));
+        $itemsByVendor = $order->items
+            ->groupBy(fn ($item) => $item->product?->vendor_id ?? 0)
+            ->map(function ($items) {
+                $vendor = $items->first()?->product?->vendor;
+
+                return [
+                    'vendor' => $vendor,
+                    'store_name' => $vendor?->store_name ?? 'Seller',
+                    'items' => $items,
+                ];
+            })
+            ->values();
+
+        return view('account.order-show', compact('order', 'itemsByVendor'));
     }
 
     /**

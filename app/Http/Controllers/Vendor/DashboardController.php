@@ -9,7 +9,7 @@ use App\Models\Product;
 use Illuminate\View\View;
 
 /**
- * Vendor dashboard with store-scoped KPIs only.
+ * Vendor dashboard with store-scoped KPIs and fulfillment counters.
  */
 class DashboardController extends Controller
 {
@@ -21,20 +21,29 @@ class DashboardController extends Controller
         $vendor = auth()->user()->vendor;
         $vendorId = $vendor->id;
 
+        $vendorItems = OrderItem::query()
+            ->whereHas('product', fn ($q) => $q->where('vendor_id', $vendorId));
+
         $totalProducts = Product::where('vendor_id', $vendorId)->count();
         $activeProducts = Product::where('vendor_id', $vendorId)->where('stock', '>', 0)->count();
         $lowStock = Product::where('vendor_id', $vendorId)->where('stock', '<', 10)->count();
 
-        $orderIds = OrderItem::query()
-            ->whereHas('product', fn ($q) => $q->where('vendor_id', $vendorId))
-            ->distinct()
-            ->pluck('order_id');
-
+        $orderIds = (clone $vendorItems)->distinct()->pluck('order_id');
         $totalOrders = $orderIds->count();
-        $pendingOrders = Order::whereIn('id', $orderIds)->where('status', 'pending')->count();
-        $completedOrders = Order::whereIn('id', $orderIds)->where('status', 'completed')->count();
 
-        // Sales = sum of this vendor's line totals only (not orders.total_price).
+        $fulfillmentCounts = OrderItem::query()
+            ->whereHas('product', fn ($q) => $q->where('vendor_id', $vendorId))
+            ->selectRaw('fulfillment_status, COUNT(*) as total')
+            ->groupBy('fulfillment_status')
+            ->pluck('total', 'fulfillment_status');
+
+        $pendingFulfillment = (int) ($fulfillmentCounts['pending'] ?? 0);
+        $confirmedFulfillment = (int) ($fulfillmentCounts['confirmed'] ?? 0);
+        $processingFulfillment = (int) ($fulfillmentCounts['processing'] ?? 0);
+        $shippedFulfillment = (int) ($fulfillmentCounts['shipped'] ?? 0);
+        $deliveredFulfillment = (int) ($fulfillmentCounts['delivered'] ?? 0);
+        $cancelledFulfillment = (int) ($fulfillmentCounts['cancelled'] ?? 0);
+
         $totalSales = (string) OrderItem::query()
             ->whereHas('product', fn ($q) => $q->where('vendor_id', $vendorId))
             ->selectRaw('COALESCE(SUM(price * quantity), 0) as vendor_sales')
@@ -61,8 +70,12 @@ class DashboardController extends Controller
             'activeProducts',
             'lowStock',
             'totalOrders',
-            'pendingOrders',
-            'completedOrders',
+            'pendingFulfillment',
+            'confirmedFulfillment',
+            'processingFulfillment',
+            'shippedFulfillment',
+            'deliveredFulfillment',
+            'cancelledFulfillment',
             'totalSales',
             'recentProducts',
             'recentOrders'

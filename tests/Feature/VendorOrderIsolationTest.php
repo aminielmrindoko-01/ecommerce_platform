@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Order;
+use App\Models\OrderItem;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Support\CreatesMarketplace;
@@ -30,8 +31,8 @@ class VendorOrderIsolationTest extends TestCase
             'payment_method' => 'cod',
             'shipping_method' => 'pickup',
         ]);
-        $order->items()->create(['product_id' => $productA->id, 'quantity' => 2, 'price' => 1000]);
-        $order->items()->create(['product_id' => $productB->id, 'quantity' => 1, 'price' => 5000]);
+        OrderItem::recordPurchase($order->id, $productA->id, 2, 1000);
+        OrderItem::recordPurchase($order->id, $productB->id, 1, 5000);
 
         $response = $this->actingAs($vendorA)->get(route('vendor.orders.show', $order));
 
@@ -55,7 +56,7 @@ class VendorOrderIsolationTest extends TestCase
             'total_price' => 5000,
             'status' => 'pending',
         ]);
-        $order->items()->create(['product_id' => $productB->id, 'quantity' => 1, 'price' => 5000]);
+        OrderItem::recordPurchase($order->id, $productB->id, 1, 5000);
 
         $this->actingAs($vendorA)
             ->get(route('vendor.orders.show', $order))

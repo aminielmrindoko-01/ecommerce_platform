@@ -290,12 +290,12 @@ class CheckoutController extends Controller
                     /** @var Product $product */
                     $product = $line['product'];
 
-                    OrderItem::create([
-                        'order_id' => $order->id,
-                        'product_id' => $product->id,
-                        'quantity' => $line['quantity'],
-                        'price' => $line['unit_price'],
-                    ]);
+                    OrderItem::recordPurchase(
+                        $order->id,
+                        $product->id,
+                        $line['quantity'],
+                        $line['unit_price']
+                    );
 
                     $product->decrement('stock', $line['quantity']);
                     $product->increment('sold_count', $line['quantity']);

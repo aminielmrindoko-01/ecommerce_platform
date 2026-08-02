@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Order;
+use App\Models\OrderItem;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Support\CreatesMarketplace;
@@ -129,11 +130,7 @@ class CheckoutSecurityTest extends TestCase
             'shipping_method' => 'pickup',
         ]);
 
-        $order->items()->create([
-            'product_id' => $product->id,
-            'quantity' => 1,
-            'price' => 1000,
-        ]);
+        OrderItem::recordPurchase($order->id, $product->id, 1, 1000);
 
         $this->actingAs($intruder)
             ->get(route('checkout.confirmation', $order))

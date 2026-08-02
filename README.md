@@ -31,6 +31,23 @@ SANA Market is a multi-vendor storefront focused on East African shopping prefer
 * Vendor order views show only that vendor’s line items and a vendor subtotal (not the full multi-vendor order total)
 * Customers cannot access vendor routes; admins use `/admin` instead of the seller hub
 
+## Multi-Vendor Fulfillment
+
+Order payment/admin lifecycle and vendor fulfillment are intentionally separate:
+
+| Field | Purpose | Values |
+|-------|---------|--------|
+| `orders.status` | Overall order / payment / admin lifecycle | `pending`, `paid`, `shipped`, `completed` |
+| `order_items.fulfillment_status` | Per-vendor line-item fulfillment | `pending`, `confirmed`, `processing`, `shipped`, `delivered`, `cancelled` |
+
+* There is **no** `orders.vendor_id`. Ownership is derived from `order_item → product.vendor_id → vendor.user_id`.
+* Vendors update fulfillment only for their own line items via `PATCH /vendor/orders/{order}/items/{orderItem}/fulfillment`.
+* Transitions are enforced by `OrderItemFulfillmentService` (e.g. `pending → confirmed → processing → shipped → delivered`; cancel from `pending` or `confirmed` only).
+* Customers can view fulfillment status on their order page (grouped by vendor) but cannot change it.
+* Admins see order status and each item’s fulfillment status in `/admin/orders`.
+* Vendor dashboards show fulfillment KPI counts for their own items only.
+* Cross-vendor IDOR attempts return `403`; price, quantity, product, and order ownership fields are not mass-assignable from fulfillment requests.
+
 ## Technology Stack
 
 * PHP 8.2+
@@ -48,7 +65,8 @@ SANA Market is a multi-vendor storefront focused on East African shopping prefer
 | HTTP routes | `routes/shop.php`, `routes/admin.php`, `routes/vendor.php` |
 | Controllers | `app/Http/Controllers/`, `app/Http/Controllers/Vendor/` |
 | Middleware | `admin`, `vendor`, `role`, marketplace preferences |
-| Policies | `ProductPolicy`, `VendorPolicy` |
+| Policies | `ProductPolicy`, `VendorPolicy`, `OrderItemPolicy` |
+| Services | `OrderItemFulfillmentService` |
 | Models | `app/Models/` |
 | Marketplace helpers | `app/Support/Marketplace.php`, `app/helpers.php` |
 | Views | `resources/views/` (including `vendor/`) |
@@ -125,6 +143,7 @@ Implemented protections include:
 * Checkout totals calculated from live product rows (session prices ignored)
 * Stock locked with `lockForUpdate()` during order placement
 * Order confirmation / account / vendor order views enforce ownership isolation
+* Vendor fulfillment updates authorized by `OrderItemPolicy` + state machine (cross-vendor IDOR blocked)
 * Registration always creates `customer` role
 * CSRF protection on web forms
 * Throttling on login, register, checkout, contact, reviews, and questions
@@ -140,7 +159,8 @@ app/Http/Controllers         Storefront, account, checkout, admin
 app/Http/Controllers/Vendor  Vendor dashboard, products, orders, profile
 app/Http/Middleware          Admin, vendor, role, marketplace preferences
 app/Models                   Eloquent models (User ↔ Vendor ↔ Product)
-app/Policies                 ProductPolicy, VendorPolicy
+app/Policies                 ProductPolicy, VendorPolicy, OrderItemPolicy
+app/Services                 OrderItemFulfillmentService
 database/migrations          Schema (MySQL-oriented)
 database/seeders             Demo users + marketplace catalog
 resources/views/vendor       Seller hub UI

@@ -15,25 +15,36 @@
         <thead>
             <tr>
                 <th align="left">Order</th>
+                <th align="left">Date</th>
                 <th align="left">Customer</th>
-                <th align="left">Status</th>
+                <th align="left">Order status</th>
                 <th align="left">Your items</th>
+                <th align="left">Fulfillment</th>
                 <th align="left">Your subtotal</th>
                 <th align="right"></th>
             </tr>
         </thead>
         <tbody>
             @forelse($orders as $order)
+                @php
+                    $statuses = $order->items->pluck('fulfillment_status')->unique()->values();
+                @endphp
                 <tr style="border-top:1px solid var(--color-border);">
                     <td style="padding:.75rem 0;"><strong>{{ $order->order_number ?? '#'.$order->id }}</strong></td>
+                    <td>{{ $order->created_at?->format('M d, Y') }}</td>
                     <td>{{ $order->user->name ?? 'Customer' }}</td>
                     <td>{{ ucfirst($order->status) }}</td>
                     <td>{{ $order->items->count() }}</td>
+                    <td>
+                        @foreach($statuses as $status)
+                            <span class="chip" style="margin:0 .15rem .15rem 0;">{{ ucfirst($status ?? 'pending') }}</span>
+                        @endforeach
+                    </td>
                     <td>TSh {{ number_format((float) $order->vendor_subtotal, 0) }}</td>
-                    <td align="right"><a class="btn btn-ghost" href="{{ route('vendor.orders.show', $order) }}" style="padding:.35rem .75rem;">View</a></td>
+                    <td align="right"><a class="btn btn-ghost" href="{{ route('vendor.orders.show', $order) }}" style="padding:.35rem .75rem;">Manage</a></td>
                 </tr>
             @empty
-                <tr><td colspan="6" style="padding:1rem 0;color:var(--color-ink-muted);">No orders yet.</td></tr>
+                <tr><td colspan="8" style="padding:1rem 0;color:var(--color-ink-muted);">No orders yet.</td></tr>
             @endforelse
         </tbody>
     </table>

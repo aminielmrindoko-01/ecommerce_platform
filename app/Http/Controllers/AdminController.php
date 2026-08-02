@@ -157,7 +157,10 @@ class AdminController extends Controller
 
     public function orders(): View
     {
-        $orders = Order::with('user')
+        $orders = Order::with([
+            'user',
+            'items.product.vendor',
+        ])
             ->latest()
             ->paginate(20);
 
