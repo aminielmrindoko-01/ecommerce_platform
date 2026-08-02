@@ -27,10 +27,12 @@
     $isComingSoon = ! $isPaid && in_array($initStatus, ['coming_soon', 'unavailable', 'failed'], true);
     $showComingSoonCopy = $isComingSoon && in_array($paymentStatus, ['pending', 'processing'], true);
     $redirectUrl = $paymentInit['metadata']['redirect_url'] ?? null;
+    $redirectAllowed = is_string($redirectUrl)
+        && $redirectUrl !== ''
+        && app(\App\Support\Payments\PesapalGateway::class)->isAllowedRedirectUrl($redirectUrl);
     $requiresAction = ! $isPaid
         && $initStatus === 'requires_action'
-        && is_string($redirectUrl)
-        && $redirectUrl !== ''
+        && $redirectAllowed
         && $context === 'customer';
 
     $amount = $payment?->amount ?? $order->total_price;

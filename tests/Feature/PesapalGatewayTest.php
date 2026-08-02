@@ -75,7 +75,21 @@ class PesapalGatewayTest extends TestCase
         return [$customer, $order->fresh(), $tx->fresh()];
     }
 
-    protected function fakePesapalHappyPath(string $trackingId = 'track-abc-123'): void
+    protected function bindLocalTracking(PaymentTransaction $tx, string $trackingId): PaymentTransaction
+    {
+        $meta = $tx->metadata ?? [];
+        $meta['pesapal'] = [
+            'order_tracking_id' => $trackingId,
+            'merchant_reference' => $tx->reference,
+            'environment' => 'sandbox',
+        ];
+        $tx->metadata = $meta;
+        $tx->save();
+
+        return $tx->fresh();
+    }
+
+    protected function fakePesapalHappyPath(string $trackingId = 'track-abc-123', ?string $merchantReference = null): void
     {
         Http::fake([
             '*/api/Auth/RequestToken' => Http::response([
@@ -90,7 +104,7 @@ class PesapalGatewayTest extends TestCase
             ], 200),
             '*/api/Transactions/SubmitOrderRequest' => Http::response([
                 'order_tracking_id' => $trackingId,
-                'merchant_reference' => 'ignored',
+                'merchant_reference' => $merchantReference ?? 'ignored',
                 'redirect_url' => 'https://cybqa.pesapal.com/pesapaliframe/PesapalIframe3/Index/?OrderTrackingId='.$trackingId,
                 'status' => '200',
             ], 200),
@@ -100,7 +114,7 @@ class PesapalGatewayTest extends TestCase
                 'currency' => 'TZS',
                 'status_code' => 1,
                 'payment_status_description' => 'Completed',
-                'merchant_reference' => null,
+                'merchant_reference' => $merchantReference,
                 'status' => '200',
             ], 200),
         ]);
@@ -224,7 +238,7 @@ class PesapalGatewayTest extends TestCase
             }
             $data = $request->data();
 
-            return isset($data['amount']) && abs((float) $data['amount'] - 1000.50) < 0.001
+            return ($data['amount'] ?? null) === '1000.50'
                 && ($data['currency'] ?? null) === 'TZS'
                 && ($data['id'] ?? null) !== null;
         });
@@ -255,6 +269,7 @@ class PesapalGatewayTest extends TestCase
         Event::fake([PaymentSuccessful::class]);
         $this->enablePesapalSandbox();
         [, $order, $tx] = $this->unpaidOrder();
+        $this->bindLocalTracking($tx, 'track-paid-1');
 
         Http::fake([
             '*/api/Auth/RequestToken' => Http::response(['token' => 'tok', 'status' => '200'], 200),
@@ -284,6 +299,7 @@ class PesapalGatewayTest extends TestCase
     {
         $this->enablePesapalSandbox();
         [$customer, $order, $tx] = $this->unpaidOrder();
+        $this->bindLocalTracking($tx, 'track-pending-1');
 
         // Status endpoint reports not completed.
         Http::fake([
@@ -314,6 +330,7 @@ class PesapalGatewayTest extends TestCase
     {
         $this->enablePesapalSandbox();
         [, $order, $tx] = $this->unpaidOrder();
+        $this->bindLocalTracking($tx, 'track-mismatch');
 
         Http::fake([
             '*/api/Auth/RequestToken' => Http::response(['token' => 'tok', 'status' => '200'], 200),
@@ -340,6 +357,7 @@ class PesapalGatewayTest extends TestCase
     {
         $this->enablePesapalSandbox();
         [, $order, $tx] = $this->unpaidOrder();
+        $this->bindLocalTracking($tx, 'track-currency');
 
         Http::fake([
             '*/api/Auth/RequestToken' => Http::response(['token' => 'tok', 'status' => '200'], 200),
@@ -367,6 +385,7 @@ class PesapalGatewayTest extends TestCase
         Event::fake([PaymentSuccessful::class]);
         $this->enablePesapalSandbox();
         [, $order, $tx] = $this->unpaidOrder();
+        $this->bindLocalTracking($tx, 'track-dup-1');
 
         Http::fake([
             '*/api/Auth/RequestToken' => Http::response(['token' => 'tok', 'status' => '200'], 200),
@@ -399,17 +418,33 @@ class PesapalGatewayTest extends TestCase
         $this->enablePesapalSandbox();
         [, $orderA, $txA] = $this->unpaidOrder();
         [, $orderB, $txB] = $this->unpaidOrder();
+        $this->bindLocalTracking($txA, 'shared-track');
+        $this->bindLocalTracking($txB, 'shared-track');
 
-        Http::fake([
-            '*/api/Auth/RequestToken' => Http::response(['token' => 'tok', 'status' => '200'], 200),
-            '*/api/Transactions/GetTransactionStatus*' => Http::response([
-                'amount' => 5000,
-                'currency' => 'TZS',
-                'status_code' => 1,
-                'payment_status_description' => 'Completed',
-                'status' => '200',
-            ], 200),
-        ]);
+        Http::fake(function ($request) use ($txA, $txB) {
+            if (str_contains($request->url(), 'RequestToken')) {
+                return Http::response(['token' => 'tok', 'status' => '200'], 200);
+            }
+
+            if (str_contains($request->url(), 'GetTransactionStatus')) {
+                // Echo whichever local reference is being verified in sequence via last pending call context.
+                // First successful pay uses txA; second attempt for txB must not become paid.
+                static $calls = 0;
+                $calls++;
+                $ref = $calls === 1 ? $txA->reference : $txB->reference;
+
+                return Http::response([
+                    'amount' => 5000,
+                    'currency' => 'TZS',
+                    'status_code' => 1,
+                    'payment_status_description' => 'Completed',
+                    'merchant_reference' => $ref,
+                    'status' => '200',
+                ], 200);
+            }
+
+            return Http::response(['status' => '404'], 404);
+        });
 
         app(PesapalPaymentProcessor::class)->processNotification([
             'OrderTrackingId' => 'shared-track',
@@ -440,6 +475,7 @@ class PesapalGatewayTest extends TestCase
     {
         $this->enablePesapalSandbox();
         [, $order, $tx] = $this->unpaidOrder();
+        $this->bindLocalTracking($tx, 'track-fail-1');
 
         Http::fake([
             '*/api/Auth/RequestToken' => Http::response(['token' => 'tok', 'status' => '200'], 200),
