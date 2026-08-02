@@ -83,6 +83,24 @@ Vendors cannot mutate payments. Live M-Pesa/card/PayPal charging, webhooks, payo
 
 When real gateways are added, webhooks must include: signature verification, provider reference validation, replay protection, idempotency, amount/currency verification, order/payment lookup under row locks, audit history, and after-commit notifications. Browser-submitted payment success must never be trusted.
 
+## Phase 7A — Gateway Ready / Coming Soon
+
+Live payment charging is intentionally disabled.
+M-Pesa, Airtel Money, Tigo Pesa, card and PayPal integrations
+will be added only after the appropriate provider credentials
+and webhook verification requirements are available.
+
+Phase 7A adds:
+
+* `config/payments.php` — method → gateway mapping (`PAYMENT_GATEWAY=stub` by default)
+* `PaymentGatewayManager` — resolves configured gateways without controller `if/else` trees
+* `StubPaymentGateway` — non-charging coming-soon / offline initialization (`supportsLiveCharging() === false`)
+* Customer checkout, confirmation, and order pages show a professional **Payment Service Coming Soon** experience for online methods
+* Placing an order or choosing “Pay” never marks `payment_status = paid`
+* Payment remains `pending` until a genuine verified transition through `PaymentService` (admin/manual today)
+
+No API credentials are required. The stub gateway never claims money was received. Future drivers (`MpesaGateway`, `StripeGateway`, etc.) will implement the same `PaymentGatewayInterface` without rewriting checkout.
+
 ## Technology Stack
 
 * PHP 8.2+
@@ -101,8 +119,8 @@ When real gateways are added, webhooks must include: signature verification, pro
 | Controllers | `app/Http/Controllers/`, `app/Http/Controllers/Vendor/` |
 | Middleware | `admin`, `vendor`, `role`, marketplace preferences |
 | Policies | `ProductPolicy`, `VendorPolicy`, `OrderItemPolicy` |
-| Services | `OrderItemFulfillmentService`, `OrderFulfillmentSummary`, `PaymentService`, `CheckoutIdempotencyService` |
-| Payment gateways | `app/Contracts/PaymentGatewayInterface.php`, `app/Support/Payments/` (stub only) |
+| Services | `OrderItemFulfillmentService`, `OrderFulfillmentSummary`, `PaymentService`, `CheckoutIdempotencyService`, `PaymentGatewayManager` |
+| Payment gateways | `config/payments.php`, `PaymentGatewayInterface`, `StubPaymentGateway` (stub / coming soon only) |
 | Notifications | Database channel (`app/Notifications/`) |
 | Events / Listeners | `OrderItemStatusChanged`, `OrderPlaced` + listeners |
 | Models | `app/Models/` |
@@ -190,7 +208,7 @@ Implemented protections include:
 * Upload MIME allow-lists for product/avatar images
 * XSS hardening in search/recently-viewed JavaScript (DOM APIs / URL checks)
 
-Payment charging is **not** integrated — selected methods are recorded and orders remain `pending` until a real gateway is added.
+Payment charging is **not** integrated — selected methods are recorded, customers see a coming-soon experience for online methods, and orders remain `pending` until a real verified gateway (or admin/manual `PaymentService` transition) is used.
 
 ## Project Structure
 

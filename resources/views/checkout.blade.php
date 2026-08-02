@@ -73,15 +73,25 @@
             @endforeach
         </section>
 
-        {{-- Payment method radios (gateways stubbed server-side) --}}
+        {{-- Payment method radios (live charging disabled — coming soon / offline) --}}
         <section class="panel">
             <h2 style="margin-top:0;font-size:1.15rem;">Payment method</h2>
-            <p style="color:var(--color-ink-muted);font-size:.9rem;margin-top:0;">Select a method. Gateway charges are stubbed until API keys are configured — your order is recorded securely with CSRF protection.</p>
-            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:.55rem;">
-                @foreach($paymentMethods as $key => $label)
-                    <label class="payment-option">
-                        <input type="radio" name="payment_method" value="{{ $key }}" @checked($key === 'mpesa') required>
-                        <span>{{ $label }}</span>
+            <p style="color:var(--color-ink-muted);font-size:.9rem;margin-top:0;">
+                Choose how you plan to pay. Online payment services are <strong>coming soon</strong> — placing an order does not charge your account and does not mark the order as paid.
+            </p>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:.55rem;">
+                @foreach($paymentMethods as $key => $method)
+                    <label class="payment-option" style="display:flex;flex-direction:column;gap:.35rem;align-items:flex-start;">
+                        <span style="display:flex;gap:.55rem;align-items:center;width:100%;">
+                            <input type="radio" name="payment_method" value="{{ $key }}" @checked(old('payment_method', 'mpesa') === $key) required>
+                            <span style="flex:1;">{{ $method['label'] }}</span>
+                            <span class="chip" style="font-size:.72rem;{{ $method['coming_soon'] ? '' : 'opacity:.85;' }}">{{ $method['badge'] }}</span>
+                        </span>
+                        @if($method['coming_soon'])
+                            <span style="font-size:.78rem;color:var(--color-ink-muted);padding-left:1.6rem;">Payment service coming soon</span>
+                        @elseif($method['offline'])
+                            <span style="font-size:.78rem;color:var(--color-ink-muted);padding-left:1.6rem;">Confirmed offline — stays pending until verified</span>
+                        @endif
                     </label>
                 @endforeach
             </div>

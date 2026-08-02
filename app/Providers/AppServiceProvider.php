@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Contracts\PaymentGatewayInterface;
+use App\Services\PaymentGatewayManager;
 use App\Support\Payments\StubPaymentGateway;
 use Illuminate\Support\ServiceProvider;
 
@@ -23,8 +24,13 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        // Default binding is the non-charging stub. Real gateways replace this later.
-        $this->app->bind(PaymentGatewayInterface::class, StubPaymentGateway::class);
+        $this->app->singleton(PaymentGatewayManager::class);
+        $this->app->singleton(StubPaymentGateway::class);
+
+        // Default binding resolves through the manager (stub / coming-soon in Phase 7A).
+        $this->app->bind(PaymentGatewayInterface::class, function ($app) {
+            return $app->make(PaymentGatewayManager::class)->default();
+        });
     }
 
     /**
