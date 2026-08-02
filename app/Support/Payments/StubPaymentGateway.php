@@ -29,6 +29,13 @@ class StubPaymentGateway implements PaymentGatewayInterface
         $methodLabel = (string) config("payments.methods.{$methodKey}.label", $this->humanize($methodKey));
         $offline = (bool) config("payments.methods.{$methodKey}.offline", false);
 
+        $safeMeta = [
+            'reference' => $transaction->reference,
+            'amount' => (string) $transaction->amount,
+            'currency' => $transaction->currency,
+            'live_charging' => false,
+        ];
+
         if ($offline) {
             return new GatewayInitializationResult(
                 status: GatewayInitializationResult::STATUS_PENDING,
@@ -37,32 +44,18 @@ class StubPaymentGateway implements PaymentGatewayInterface
                 methodLabel: $methodLabel,
                 headline: $methodLabel,
                 message: $methodKey === 'cod'
-                    ? 'Pay when your order arrives. Payment status stays pending until our team confirms receipt.'
-                    : 'Complete this offline payment using the details shared by our team. Online confirmation remains pending until verified.',
-                metadata: [
-                    'reference' => $transaction->reference,
-                    'amount' => (string) $transaction->amount,
-                    'currency' => $transaction->currency,
-                    'mode' => 'offline',
-                    'live_charging' => false,
-                ],
+                    ? 'Pay when your order arrives. Payment status stays pending until our team confirms receipt. No online payment has been charged.'
+                    : 'Complete this offline payment using the details shared by our team. Online confirmation remains pending until verified. No card or mobile-money charge has been made.',
+                metadata: array_merge($safeMeta, ['mode' => 'offline']),
             );
         }
 
-        return new GatewayInitializationResult(
-            status: GatewayInitializationResult::STATUS_COMING_SOON,
-            provider: $this->key(),
-            methodKey: $methodKey,
-            methodLabel: $methodLabel,
-            headline: 'Payment Service Coming Soon',
-            message: "We're preparing secure online payments for {$methodLabel}. This payment method is not currently available, but we're working to make it available soon.",
-            metadata: [
-                'reference' => $transaction->reference,
-                'amount' => (string) $transaction->amount,
-                'currency' => $transaction->currency,
-                'mode' => 'coming_soon',
-                'live_charging' => false,
-            ],
+        return GatewayInitializationResult::comingSoon(
+            $this->key(),
+            $methodKey,
+            $methodLabel,
+            "We're preparing secure online payments for {$methodLabel}. Online payment is currently unavailable. You can place your order now, and payment will be enabled when the service becomes available. No payment has been charged.",
+            array_merge($safeMeta, ['mode' => 'coming_soon']),
         );
     }
 

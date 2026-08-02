@@ -22,6 +22,7 @@ use App\Models\User;
 use App\Models\Vendor;
 use App\Services\OrderFulfillmentSummary;
 use App\Services\OrderItemFulfillmentService;
+use App\Services\PaymentGatewayManager;
 use App\Services\PaymentService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -165,7 +166,8 @@ class AdminController extends Controller
     public function orders(
         OrderFulfillmentSummary $summary,
         OrderItemFulfillmentService $fulfillment,
-        PaymentService $payments
+        PaymentService $payments,
+        PaymentGatewayManager $gateways
     ): View {
         $orders = Order::with([
             'user',
@@ -175,7 +177,7 @@ class AdminController extends Controller
             ->latest()
             ->paginate(20);
 
-        $orders->getCollection()->transform(function (Order $order) use ($summary, $fulfillment, $payments) {
+        $orders->getCollection()->transform(function (Order $order) use ($summary, $fulfillment, $payments, $gateways) {
             $order->setAttribute('fulfillment_summary', $summary->summarize($order));
             $order->setAttribute('fulfillment_summary_label', $summary->label($order->fulfillment_summary));
 
@@ -188,10 +190,30 @@ class AdminController extends Controller
             $paymentStatus = $order->payment_status ?: 'pending';
             $order->setAttribute('admin_allowed_payments', $payments->allowedTransitions($paymentStatus));
 
+            $tx = $order->latestPaymentTransaction;
+            if ($tx) {
+                $order->setAttribute('admin_payment_init', $gateways->initialize($order, $tx)->toArray());
+            } else {
+                $method = (string) ($order->payment_method ?: 'unknown');
+                $label = (string) config("payments.methods.{$method}.label", $method);
+                $order->setAttribute('admin_payment_init', [
+                    'status' => 'coming_soon',
+                    'provider' => 'stub',
+                    'method_key' => $method,
+                    'method_label' => $label,
+                    'headline' => 'Payment Service Coming Soon',
+                    'message' => 'Online payment is currently unavailable. No payment has been charged.',
+                    'metadata' => [],
+                ]);
+            }
+            $order->setAttribute('admin_payment_gateway_label', $gateways->activeGatewayDisplayName());
+
             return $order;
         });
 
-        return view('admin.orders', compact('orders'));
+        $activePaymentGateway = $gateways->activeGatewayDisplayName();
+
+        return view('admin.orders', compact('orders', 'activePaymentGateway'));
     }
 
     /**

@@ -3,11 +3,13 @@
 namespace App\Notifications;
 
 use App\Models\PaymentTransaction;
+use App\Support\Payments\PaymentStatusPresenter;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Notification;
 
 /**
  * Database notification when a customer's order payment status changes.
+ * Dispatched only after real PaymentService transitions (not stub init).
  */
 class CustomerPaymentUpdated extends Notification
 {
@@ -33,24 +35,28 @@ class CustomerPaymentUpdated extends Notification
     {
         $order = $this->paymentTransaction->order;
         $orderNumber = $order?->order_number ?? ('#'.$this->paymentTransaction->order_id);
-        $reference = $this->paymentTransaction->reference;
+        $statusLabel = PaymentStatusPresenter::label($this->paymentTransaction->status);
 
         [$title, $body] = match ($this->outcome) {
             'successful' => [
-                "Payment successful — {$orderNumber}",
-                "Payment for order {$orderNumber} was successful (ref {$reference}).",
+                "Payment received — {$orderNumber}",
+                "Payment received successfully for order {$orderNumber}.",
             ],
             'failed' => [
                 "Payment failed — {$orderNumber}",
-                "Payment for order {$orderNumber} failed (ref {$reference}).",
+                "Payment for order {$orderNumber} failed.",
             ],
             'cancelled' => [
                 "Payment cancelled — {$orderNumber}",
-                "Payment for order {$orderNumber} was cancelled (ref {$reference}).",
+                "Payment for order {$orderNumber} was cancelled.",
+            ],
+            'pending' => [
+                "Payment pending — {$orderNumber}",
+                "Payment for order {$orderNumber} is still pending.",
             ],
             default => [
                 "Payment update — {$orderNumber}",
-                "Payment status updated for order {$orderNumber}.",
+                "Payment for order {$orderNumber} is now {$statusLabel}.",
             ],
         };
 
@@ -60,7 +66,7 @@ class CustomerPaymentUpdated extends Notification
             'order_id' => $this->paymentTransaction->order_id,
             'payment_transaction_id' => $this->paymentTransaction->id,
             'payment_status' => $this->paymentTransaction->status,
-            'reference' => $reference,
+            'reference' => $this->paymentTransaction->reference,
             'outcome' => $this->outcome,
         ];
     }
