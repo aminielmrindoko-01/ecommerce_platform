@@ -4,14 +4,14 @@ namespace App\Contracts;
 
 use App\Models\Order;
 use App\Models\PaymentTransaction;
+use App\Support\Payments\GatewayInitializationResult;
 use App\Support\Payments\GatewayVerificationResult;
 
 /**
  * Future real-gateway adapter contract.
  *
- * Phase 6 readiness only — no live charging. Implementations must never
- * trust browser-submitted success; verify provider signatures/amounts
- * server-side before calling PaymentService.
+ * Implementations must never trust browser-submitted success; verify provider
+ * signatures/amounts server-side before calling PaymentService.
  */
 interface PaymentGatewayInterface
 {
@@ -21,11 +21,16 @@ interface PaymentGatewayInterface
     public function key(): string;
 
     /**
-     * Prepare a provider-side payment intent/session for an order transaction.
-     *
-     * @return array<string, mixed> Non-secret initialization payload for the client/UI
+     * Whether this driver is permitted to perform live charges.
+     * Phase 7A stub/coming-soon drivers always return false.
      */
-    public function initializePayment(Order $order, PaymentTransaction $transaction): array;
+    public function supportsLiveCharging(): bool;
+
+    /**
+     * Prepare a provider-side payment intent/session for an order transaction.
+     * Must not mark the order paid and must not call external payment APIs in Phase 7A.
+     */
+    public function initializePayment(Order $order, PaymentTransaction $transaction): GatewayInitializationResult;
 
     /**
      * Verify a provider callback/webhook payload.

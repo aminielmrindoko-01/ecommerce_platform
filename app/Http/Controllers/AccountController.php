@@ -14,6 +14,8 @@ use App\Models\Address;
 use App\Models\Order;
 use App\Models\Wishlist;
 use App\Services\OrderFulfillmentSummary;
+use App\Services\PaymentGatewayManager;
+use App\Services\PaymentService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Notifications\DatabaseNotification;
@@ -56,8 +58,12 @@ class AccountController extends Controller
      * Single order detail — owner only.
      * Items are grouped by vendor for multi-vendor fulfillment visibility.
      */
-    public function showOrder(Order $order, OrderFulfillmentSummary $summary): View
-    {
+    public function showOrder(
+        Order $order,
+        OrderFulfillmentSummary $summary,
+        PaymentGatewayManager $gateways,
+        PaymentService $payments
+    ): View {
         abort_unless($order->user_id === auth()->id(), 403);
         $order->load(['items.product.vendor', 'latestPaymentTransaction']);
 
@@ -77,11 +83,16 @@ class AccountController extends Controller
         $fulfillmentSummary = $summary->summarize($order);
         $fulfillmentSummaryLabel = $summary->label($fulfillmentSummary);
 
+        $transaction = $order->latestPaymentTransaction
+            ?? $payments->ensurePendingTransaction($order, 'stub');
+        $paymentInit = $gateways->initialize($order, $transaction)->toArray();
+
         return view('account.order-show', compact(
             'order',
             'itemsByVendor',
             'fulfillmentSummary',
-            'fulfillmentSummaryLabel'
+            'fulfillmentSummaryLabel',
+            'paymentInit'
         ));
     }
 

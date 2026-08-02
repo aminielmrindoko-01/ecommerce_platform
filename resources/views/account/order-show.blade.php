@@ -20,6 +20,10 @@
         <div style="display:flex;justify-content:space-between;"><span>Shipping</span><strong>{{ ucfirst($order->shipping_method ?? 'standard') }}</strong></div>
         <div style="display:flex;justify-content:space-between;"><span>Total</span><strong>{{ money($order->total_price) }}</strong></div>
     </div>
+
+    @isset($paymentInit)
+        @include('partials.payment-status-panel', ['order' => $order, 'paymentInit' => $paymentInit])
+    @endisset
     @if($order->shipping_address)
         <div class="panel" style="background:var(--color-surface);">
             <strong>Ship to</strong>

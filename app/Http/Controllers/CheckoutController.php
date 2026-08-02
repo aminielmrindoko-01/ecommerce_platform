@@ -18,6 +18,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
 use App\Services\CheckoutIdempotencyService;
+use App\Services\PaymentGatewayManager;
 use App\Services\PaymentService;
 use App\Support\Marketplace;
 use Illuminate\Http\RedirectResponse;
@@ -35,31 +36,6 @@ use InvalidArgumentException;
  */
 class CheckoutController extends Controller
 {
-    /**
-     * Allowed payment method keys shown on the checkout form (integrations stubbed).
-     *
-     * @return array<string, string>
-     */
-    protected function paymentMethods(): array
-    {
-        return [
-            'card' => 'Visa / Mastercard / Amex',
-            'paypal' => 'PayPal',
-            'apple_pay' => 'Apple Pay',
-            'google_pay' => 'Google Pay',
-            'stripe' => 'Stripe',
-            'mpesa' => 'M-Pesa',
-            'airtel' => 'Airtel Money',
-            'tigo' => 'Tigo Pesa',
-            'halopesa' => 'HaloPesa',
-            'mixx' => 'Mixx by Yas',
-            'mtn' => 'MTN MoMo',
-            'orange' => 'Orange Money',
-            'bank' => 'Bank transfer',
-            'cod' => 'Cash on delivery',
-        ];
-    }
-
     /**
      * Rebuild cart lines from the database so session prices cannot be trusted.
      *
@@ -106,7 +82,7 @@ class CheckoutController extends Controller
     /**
      * Show checkout with address book, shipping options, tax, and payment methods.
      */
-    public function show(): View|RedirectResponse
+    public function show(PaymentGatewayManager $gateways): View|RedirectResponse
     {
         $sessionCart = session('cart', []);
 
@@ -155,7 +131,7 @@ class CheckoutController extends Controller
         $tax = round(($subtotal - $discount) * $taxRate, 2);
         $total = max(0, $subtotal - $discount + $shipping + $tax);
 
-        $paymentMethods = $this->paymentMethods();
+        $paymentMethods = $gateways->checkoutMethods();
         $phonePrefix = Marketplace::countries()[Marketplace::country()]['phone'] ?? '+255';
         $shippingRegion = Marketplace::shippingRegions()[Marketplace::countries()[Marketplace::country()]['shipping']] ?? 'East Africa';
 
@@ -189,7 +165,8 @@ class CheckoutController extends Controller
     public function place(
         Request $request,
         PaymentService $payments,
-        CheckoutIdempotencyService $checkoutIds
+        CheckoutIdempotencyService $checkoutIds,
+        PaymentGatewayManager $gateways
     ): RedirectResponse {
         $sessionCart = session('cart', []);
 
@@ -197,7 +174,7 @@ class CheckoutController extends Controller
             return redirect()->route('cart.index')->with('error', 'Your cart is empty.');
         }
 
-        $paymentKeys = array_keys($this->paymentMethods());
+        $paymentKeys = $gateways->methodKeys();
 
         $data = $request->validate([
             'full_name' => 'required|string|max:120',
@@ -337,23 +314,33 @@ class CheckoutController extends Controller
 
         session()->forget(['cart', 'coupon_code']);
 
-        $payments->ensurePendingTransaction($order, 'stub');
+        $transaction = $payments->ensurePendingTransaction($order, 'stub');
+        $paymentInit = $gateways->initialize($order, $transaction);
 
         OrderPlaced::dispatch($order->load('items.product.vendor.user'));
 
-        // Payment handlers are stubbed: real gateways (Stripe / M-Pesa) require configured keys.
-        return redirect()->route('checkout.confirmation', $order)->with('success', 'Order placed! Complete payment using your selected method.');
+        // Gateway init never marks paid — status remains pending until verified.
+        return redirect()
+            ->route('checkout.confirmation', $order)
+            ->with('success', 'Order placed successfully.')
+            ->with('payment_init', $paymentInit->toArray());
     }
 
     /**
      * Order confirmation — owner or admin only (IDOR protection).
      */
-    public function confirmation(Order $order): View
+    public function confirmation(Order $order, PaymentGatewayManager $gateways, PaymentService $payments): View
     {
         abort_unless($order->user_id === auth()->id() || auth()->user()?->isAdmin(), 403);
 
         $order->load(['items.product', 'latestPaymentTransaction']);
 
-        return view('checkout-confirmation', compact('order'));
+        $transaction = $order->latestPaymentTransaction
+            ?? $payments->ensurePendingTransaction($order, 'stub');
+
+        $paymentInit = session('payment_init')
+            ?? $gateways->initialize($order, $transaction)->toArray();
+
+        return view('checkout-confirmation', compact('order', 'paymentInit'));
     }
 }

@@ -317,9 +317,11 @@ class PaymentHardeningTest extends TestCase
         $gateway = app(PaymentGatewayInterface::class);
 
         $this->assertInstanceOf(StubPaymentGateway::class, $gateway);
+        $this->assertFalse($gateway->supportsLiveCharging());
         $init = $gateway->initializePayment($order, $tx);
-        $this->assertSame('stub', $init['provider']);
-        $this->assertSame('stub', $init['mode']);
+        $this->assertSame('stub', $init->provider);
+        $this->assertFalse($init->claimsPaymentSuccess());
+        $this->assertTrue($init->isComingSoon());
 
         $result = $gateway->verifyPayment($tx, ['status' => 'success', 'amount' => '1']);
         $this->assertFalse($result->successful);
