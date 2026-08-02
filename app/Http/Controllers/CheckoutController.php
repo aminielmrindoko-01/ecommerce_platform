@@ -16,6 +16,7 @@ use App\Models\Address;
 use App\Models\Coupon;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\PaymentTransaction;
 use App\Models\Product;
 use App\Services\CheckoutIdempotencyService;
 use App\Services\PaymentGatewayManager;
@@ -314,7 +315,10 @@ class CheckoutController extends Controller
 
         session()->forget(['cart', 'coupon_code']);
 
-        $transaction = $payments->ensurePendingTransaction($order, 'stub');
+        $transaction = $payments->ensurePendingTransaction(
+            $order,
+            $this->paymentProviderForOrder($order)
+        );
         $paymentInit = $gateways->initialize($order, $transaction);
 
         OrderPlaced::dispatch($order->load('items.product.vendor.user'));
@@ -336,11 +340,27 @@ class CheckoutController extends Controller
         $order->load(['items.product', 'latestPaymentTransaction']);
 
         $transaction = $order->latestPaymentTransaction
-            ?? $payments->ensurePendingTransaction($order, 'stub');
+            ?? $payments->ensurePendingTransaction(
+                $order,
+                $this->paymentProviderForOrder($order)
+            );
 
         $paymentInit = session('payment_init')
             ?? $gateways->initialize($order, $transaction)->toArray();
 
         return view('checkout-confirmation', compact('order', 'paymentInit'));
+    }
+
+    /**
+     * Map configured method gateway to a PaymentTransaction provider key.
+     */
+    protected function paymentProviderForOrder(Order $order): string
+    {
+        $gateway = (string) config(
+            'payments.methods.'.($order->payment_method ?: '').'.gateway',
+            'stub'
+        );
+
+        return in_array($gateway, PaymentTransaction::PROVIDERS, true) ? $gateway : 'stub';
     }
 }

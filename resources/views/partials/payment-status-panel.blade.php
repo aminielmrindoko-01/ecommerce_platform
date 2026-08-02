@@ -26,6 +26,12 @@
     $isPaid = $paymentStatus === 'paid';
     $isComingSoon = ! $isPaid && in_array($initStatus, ['coming_soon', 'unavailable', 'failed'], true);
     $showComingSoonCopy = $isComingSoon && in_array($paymentStatus, ['pending', 'processing'], true);
+    $redirectUrl = $paymentInit['metadata']['redirect_url'] ?? null;
+    $requiresAction = ! $isPaid
+        && $initStatus === 'requires_action'
+        && is_string($redirectUrl)
+        && $redirectUrl !== ''
+        && $context === 'customer';
 
     $amount = $payment?->amount ?? $order->total_price;
     $currency = $payment?->currency ?? config('payments.currency', 'TZS');
@@ -68,6 +74,15 @@
         <p style="margin:1rem 0 0;color:var(--color-ink-muted);line-height:1.55;">
             Payment received successfully for this order.
         </p>
+    @elseif($requiresAction)
+        <h3 style="margin:1rem 0 .4rem;font-size:1.05rem;">{{ $headline }}</h3>
+        <p style="margin:0;color:var(--color-ink-muted);line-height:1.55;">{{ $message }}</p>
+        <p style="margin:.75rem 0 0;font-size:.9rem;color:var(--color-ink-muted);">
+            Payment status stays <strong>{{ $statusLabel }}</strong> until PesaPal is independently verified. Returning from the payment page alone does not mark this order as paid.
+        </p>
+        <a class="btn btn-primary" style="display:inline-block;margin-top:1rem;" href="{{ $redirectUrl }}" rel="noopener noreferrer">
+            Continue to PesaPal
+        </a>
     @elseif($showComingSoonCopy)
         <h3 style="margin:1rem 0 .4rem;font-size:1.05rem;">{{ $headline }}</h3>
         <p style="margin:0;color:var(--color-ink-muted);line-height:1.55;">{{ $message }}</p>

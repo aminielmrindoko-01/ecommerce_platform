@@ -4,6 +4,8 @@ namespace App\Providers;
 
 use App\Contracts\PaymentGatewayInterface;
 use App\Services\PaymentGatewayManager;
+use App\Support\Payments\PesapalClient;
+use App\Support\Payments\PesapalGateway;
 use App\Support\Payments\StubPaymentGateway;
 use Illuminate\Support\ServiceProvider;
 
@@ -26,8 +28,10 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->app->singleton(PaymentGatewayManager::class);
         $this->app->singleton(StubPaymentGateway::class);
+        $this->app->singleton(PesapalClient::class);
+        $this->app->singleton(PesapalGateway::class);
 
-        // Default binding resolves through the manager (stub / coming-soon in Phase 7A).
+        // Default binding resolves through the manager (stub / coming-soon unless configured).
         $this->app->bind(PaymentGatewayInterface::class, function ($app) {
             return $app->make(PaymentGatewayManager::class)->default();
         });

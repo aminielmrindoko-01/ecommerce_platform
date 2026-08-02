@@ -14,6 +14,8 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CartController;
 use App\Http\Controllers\CheckoutController;
 use App\Http\Controllers\HomeController;
+use App\Http\Controllers\Payments\PesapalCallbackController;
+use App\Http\Controllers\Payments\PesapalWebhookController;
 use App\Http\Controllers\PreferenceController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\SeoController;
@@ -94,3 +96,18 @@ Route::middleware('auth')->group(function () {
     Route::post('/checkout', [CheckoutController::class, 'place'])->middleware('throttle:10,1')->name('checkout.place');
     Route::get('/checkout/confirmation/{order}', [CheckoutController::class, 'confirmation'])->name('checkout.confirmation');
 });
+
+/*
+|--------------------------------------------------------------------------
+| PesaPal sandbox callback / IPN (Phase 8A)
+|--------------------------------------------------------------------------
+| Browser return is NOT proof of payment. IPN/callback must verify independently
+| via GetTransactionStatus and only then call PaymentService.
+*/
+Route::match(['get', 'post'], '/api/payments/pesapal/ipn', PesapalWebhookController::class)
+    ->middleware('throttle:60,1')
+    ->name('payments.pesapal.ipn');
+
+Route::get('/payments/pesapal/callback', PesapalCallbackController::class)
+    ->middleware('throttle:60,1')
+    ->name('payments.pesapal.callback');

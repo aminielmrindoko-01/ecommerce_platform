@@ -26,6 +26,7 @@ class PaymentTransaction extends Model
     public const PROVIDERS = [
         'manual',
         'stub',
+        'pesapal',
     ];
 
     /**
