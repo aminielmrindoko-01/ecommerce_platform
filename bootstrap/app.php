@@ -20,6 +20,11 @@ return Application::configure(basePath: dirname(__DIR__))
             SetMarketplacePreferences::class,
         ]);
 
+        // PesaPal IPN cannot send CSRF tokens.
+        $middleware->validateCsrfTokens(except: [
+            'api/payments/pesapal/ipn',
+        ]);
+
         $middleware->alias([
             'admin' => AdminMiddleware::class,
             'vendor' => VendorMiddleware::class,

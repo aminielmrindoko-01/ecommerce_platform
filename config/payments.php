@@ -121,6 +121,12 @@ return [
             'offline' => true,
             'group' => 'offline',
         ],
+        'pesapal' => [
+            'label' => 'PesaPal',
+            'gateway' => 'pesapal',
+            'offline' => false,
+            'group' => 'online',
+        ],
     ],
 
     /*
@@ -188,6 +194,26 @@ return [
             'live_charging' => env('PAYMENT_PAYPAL_LIVE_CHARGING', false),
             'coming_soon' => true,
             'availability' => 'coming_soon',
+        ],
+        'pesapal' => [
+            'driver' => 'pesapal',
+            'name' => 'PesaPal',
+            'display_name' => 'PesaPal (Sandbox)',
+            'enabled' => env('PAYMENT_PESAPAL_ENABLED', false),
+            // Sandbox charging only — NOT production money movement.
+            'live_charging' => env('PAYMENT_PESAPAL_SANDBOX_CHARGING', false),
+            'coming_soon' => true,
+            'availability' => 'coming_soon',
+            'environment' => env('PESAPAL_ENV', 'sandbox'),
+            'consumer_key' => env('PESAPAL_CONSUMER_KEY'),
+            'consumer_secret' => env('PESAPAL_CONSUMER_SECRET'),
+            'callback_url' => env('PESAPAL_CALLBACK_URL'),
+            'ipn_url' => env('PESAPAL_IPN_URL'),
+            'timeout' => (int) env('PESAPAL_TIMEOUT', 15),
+            'base_urls' => [
+                'sandbox' => 'https://cybqa.pesapal.com/pesapalv3',
+                // Production URL intentionally unused in Phase 8A.
+            ],
         ],
     ],
 ];

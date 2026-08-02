@@ -7,6 +7,7 @@ use App\Models\Order;
 use App\Models\PaymentTransaction;
 use App\Support\Payments\GatewayInitializationResult;
 use App\Support\Payments\PaymentStatusPresenter;
+use App\Support\Payments\PesapalGateway;
 use App\Support\Payments\StubPaymentGateway;
 use Illuminate\Contracts\Container\Container;
 use InvalidArgumentException;
@@ -102,8 +103,22 @@ class PaymentGatewayManager
             return false;
         }
 
-        return (bool) ($gateway['enabled'] ?? false)
-            && (bool) ($gateway['live_charging'] ?? false);
+        if (! (bool) ($gateway['enabled'] ?? false) || ! (bool) ($gateway['live_charging'] ?? false)) {
+            return false;
+        }
+
+        // Phase 8A: PesaPal may only charge in sandbox with credentials present.
+        if ($gatewayKey === 'pesapal') {
+            if (strtolower((string) ($gateway['environment'] ?? '')) !== 'sandbox') {
+                return false;
+            }
+
+            if (! filled($gateway['consumer_key'] ?? null) || ! filled($gateway['consumer_secret'] ?? null)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     public function activeGatewayKey(): string
@@ -140,6 +155,7 @@ class PaymentGatewayManager
 
         return match ($driver) {
             'stub' => $this->stub(),
+            'pesapal' => $this->container->make(PesapalGateway::class),
             // Future: 'mpesa' => $this->container->make(MpesaGateway::class),
             // Future: 'airtel' => $this->container->make(AirtelMoneyGateway::class),
             // Future: 'tigo' => $this->container->make(TigoPesaGateway::class),

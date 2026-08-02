@@ -128,6 +128,61 @@ No API credentials are required. The stub gateway never claims money was receive
 
 Fail closed: a misconfigured live gateway must fall back to stub/unavailable behavior and must never mark payment as paid.
 
+## Phase 8A — PesaPal Sandbox
+
+Phase 8A adds a **sandbox-only** `PesapalGateway` adapter. This is **NOT** production payment processing.
+
+```text
+Checkout → PaymentGatewayManager → PesapalGateway → PesaPal SANDBOX
+       → IPN/callback → GetTransactionStatus → PaymentService → paid
+```
+
+### Defaults
+
+* `PAYMENT_GATEWAY=stub` (unchanged)
+* Without PesaPal credentials / enable flags, customers still see **Coming Soon**
+* Browser return from PesaPal is **not** proof of payment
+
+### Enable sandbox (local / staging)
+
+```env
+PAYMENT_GATEWAY=pesapal
+PAYMENT_PESAPAL_ENABLED=true
+PAYMENT_PESAPAL_SANDBOX_CHARGING=true
+PESAPAL_ENV=sandbox
+PESAPAL_CONSUMER_KEY=
+PESAPAL_CONSUMER_SECRET=
+PESAPAL_CALLBACK_URL="${APP_URL}/payments/pesapal/callback"
+PESAPAL_IPN_URL="${APP_URL}/api/payments/pesapal/ipn"
+PESAPAL_TIMEOUT=15
+```
+
+`PESAPAL_ENV=production` is rejected in Phase 8A (fail closed).
+
+### Security rules
+
+* Amount comes from `order.total_price` only
+* Paid transitions only via `PaymentService` after GetTransactionStatus verification
+* Amount + currency must match
+* Provider references remain unique / idempotent
+* Secrets never appear in Blade, JS, logs, or the database
+
+### Tests
+
+```bash
+php artisan test --filter=PesapalGatewayTest
+php artisan test
+```
+
+Tests mock PesaPal HTTP calls and do not require internet or real credentials.
+
+```text
+NO PRODUCTION PAYMENT PROCESSING
+NO REAL-MONEY CHARGING
+NO PRODUCTION CREDENTIALS
+SANDBOX ONLY
+```
+
 ## Technology Stack
 
 * PHP 8.2+
