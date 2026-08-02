@@ -16,7 +16,7 @@ use InvalidArgumentException;
 /**
  * Central authority for order payment state (foundation: manual/stub only).
  *
- * Uses lockForUpdate, decimal comparisons, and unique references for idempotency.
+ * Uses lockForUpdate, decimal-safe comparisons, and unique references for idempotency.
  */
 class PaymentService
 {
@@ -133,15 +133,17 @@ class PaymentService
                         throw new InvalidArgumentException('Provider reference already used for another order.');
                     }
 
-                    if ($byProviderRef->status === $nextStatus || ($byProviderRef->status === 'paid' && $nextStatus === 'paid')) {
+                    if ($byProviderRef->status === $nextStatus
+                        || ($byProviderRef->status === 'paid' && $nextStatus === 'paid')) {
                         return ['tx' => $byProviderRef, 'changed' => false, 'event' => null];
                     }
                 }
             }
 
+            // Use the latest transaction for this order (including terminal states).
+            // Do not silently create a new pending row to bypass failed/cancelled/refunded.
             $tx = PaymentTransaction::query()
                 ->where('order_id', $lockedOrder->id)
-                ->whereIn('status', ['pending', 'processing', 'paid', 'partially_refunded'])
                 ->lockForUpdate()
                 ->latest('id')
                 ->first();
@@ -169,12 +171,23 @@ class PaymentService
 
             $current = $tx->status ?: 'pending';
 
-            if ($current === $nextStatus) {
+            // Already paid: same provider reference (or no new ref) → idempotent no-op.
+            // Different provider reference → reject (never silent).
+            if ($current === 'paid' && $nextStatus === 'paid') {
+                $storedRef = $tx->provider_reference;
+
+                if ($providerReference !== null) {
+                    if ($storedRef === null || ! hash_equals((string) $storedRef, $providerReference)) {
+                        throw new InvalidArgumentException(
+                            'Conflicting provider reference for an already-paid order.'
+                        );
+                    }
+                }
+
                 return ['tx' => $tx, 'changed' => false, 'event' => null];
             }
 
-            // Already paid: rejecting a second different paid attempt; same status handled above.
-            if ($current === 'paid' && $nextStatus === 'paid') {
+            if ($current === $nextStatus) {
                 return ['tx' => $tx, 'changed' => false, 'event' => null];
             }
 
@@ -231,7 +244,7 @@ class PaymentService
                     'provider' => $tx->provider,
                     'reference' => $tx->reference,
                     'provider_reference' => $tx->provider_reference,
-                    'amount' => (string) $tx->amount,
+                    'amount' => $this->normalizeMoney($tx->amount),
                     'currency' => $tx->currency,
                 ],
             ]);
@@ -246,6 +259,7 @@ class PaymentService
             return ['tx' => $tx->fresh(['order']), 'changed' => true, 'event' => $event];
         });
 
+        // Events only after successful commit.
         if ($result['changed'] && $result['event']) {
             $tx = $result['tx'];
             match ($result['event']) {
@@ -298,17 +312,37 @@ class PaymentService
     }
 
     /**
-     * Authoritative order amount as a 2-decimal string.
+     * Authoritative order amount as a 2-decimal money string (no float math).
      */
     public function authoritativeAmount(Order $order): string
     {
-        return number_format((float) $order->total_price, 2, '.', '');
+        $raw = $order->getAttributes()['total_price'] ?? $order->total_price;
+
+        return $this->normalizeMoney($raw);
+    }
+
+    /**
+     * Normalize a decimal/money value to scale-2 string without binary floats.
+     */
+    public function normalizeMoney(mixed $value): string
+    {
+        if ($value === null || $value === '') {
+            throw new InvalidArgumentException('Money value is required.');
+        }
+
+        $string = is_string($value) ? trim($value) : (string) $value;
+
+        if (! preg_match('/^-?\d+(\.\d+)?$/', $string)) {
+            throw new InvalidArgumentException('Invalid money value.');
+        }
+
+        return bcadd($string, '0', 2);
     }
 
     protected function assertAmountMatchesOrder(PaymentTransaction $tx, Order $order): void
     {
         $expected = $this->authoritativeAmount($order);
-        $actual = number_format((float) $tx->amount, 2, '.', '');
+        $actual = $this->normalizeMoney($tx->getAttributes()['amount'] ?? $tx->amount);
 
         if (bccomp($actual, '0.00', 2) <= 0) {
             throw new InvalidArgumentException('Payment amount must be greater than zero.');

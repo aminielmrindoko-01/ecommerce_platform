@@ -32,15 +32,26 @@
             </div>
         </div>
         <div style="display:grid;gap:.75rem;justify-items:end;">
-            <form method="POST" action="{{ route('admin.orders.update', $order->id) }}" style="display:flex;gap:.4rem;align-items:center;">
+            <form method="POST" action="{{ route('admin.orders.update', $order->id) }}" style="display:grid;gap:.35rem;justify-items:end;">
                 @csrf @method('PUT')
                 <label class="sr-only" for="order-status-{{ $order->id }}">Order status</label>
-                <select id="order-status-{{ $order->id }}" name="status" class="form-control" style="width:auto;">
-                    @foreach(['pending','paid','shipped','completed'] as $status)
-                        <option value="{{ $status }}" @selected($order->status === $status)>Order: {{ ucfirst($status) }}</option>
-                    @endforeach
-                </select>
+                @if(($order->status ?? '') === 'paid')
+                    <div style="font-size:.9rem;color:var(--color-ink-muted);">Order status: <strong>Paid</strong> (via payment)</div>
+                    <select id="order-status-{{ $order->id }}" name="status" class="form-control" style="width:auto;">
+                        <option value="shipped">Move to Shipped</option>
+                        <option value="completed">Move to Completed</option>
+                    </select>
+                @else
+                    <select id="order-status-{{ $order->id }}" name="status" class="form-control" style="width:auto;">
+                        @foreach(['pending','shipped','completed'] as $status)
+                            <option value="{{ $status }}" @selected($order->status === $status)>Order: {{ ucfirst($status) }}</option>
+                        @endforeach
+                    </select>
+                @endif
                 <button class="btn btn-ghost" type="submit" style="padding:.45rem .7rem;">Save order status</button>
+                <p style="margin:0;font-size:.8rem;color:var(--color-ink-muted);max-width:280px;text-align:right;">
+                    Payment paid is only available via Update payment.
+                </p>
             </form>
 
             @if(count($paymentNext))

@@ -11,7 +11,6 @@ use App\Notifications\CustomerPaymentUpdated;
 use App\Services\PaymentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
-use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Tests\Support\CreatesMarketplace;
 use Tests\TestCase;
@@ -296,7 +295,7 @@ class PaymentOperationsTest extends TestCase
         $user = User::factory()->create();
         [, $store] = $this->createVendorUser();
         $product = $this->createProductForVendor($store, ['price' => 10000, 'stock' => 5]);
-        $token = (string) Str::uuid();
+        $token = app(\App\Services\CheckoutIdempotencyService::class)->issue($user);
         $cart = [
             $product->id => [
                 'name' => $product->name,
@@ -317,23 +316,16 @@ class PaymentOperationsTest extends TestCase
         ];
 
         $this->actingAs($user)
-            ->withSession([
-                'cart' => $cart,
-                'checkout_idempotency_token' => $token,
-            ])
+            ->withSession(['cart' => $cart])
             ->post(route('checkout.place'), $payload)
             ->assertRedirect();
 
         $this->assertSame(1, Order::count());
 
-        // Reuse same token/session after consumption.
         $this->actingAs($user)
-            ->withSession([
-                'cart' => $cart,
-                // token already consumed; simulate stale double-submit
-            ])
+            ->withSession(['cart' => $cart])
             ->post(route('checkout.place'), $payload)
-            ->assertRedirect(route('checkout'));
+            ->assertRedirect(route('account.orders'));
 
         $this->assertSame(1, Order::count());
     }

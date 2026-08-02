@@ -17,6 +17,7 @@ use App\Models\Coupon;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
+use App\Services\CheckoutIdempotencyService;
 use App\Services\PaymentService;
 use App\Support\Marketplace;
 use Illuminate\Http\RedirectResponse;
@@ -25,6 +26,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use InvalidArgumentException;
 
 /**
  * Checkout form, transactional order creation, and confirmation page.
@@ -157,8 +159,7 @@ class CheckoutController extends Controller
         $phonePrefix = Marketplace::countries()[Marketplace::country()]['phone'] ?? '+255';
         $shippingRegion = Marketplace::shippingRegions()[Marketplace::countries()[Marketplace::country()]['shipping']] ?? 'East Africa';
 
-        $checkoutToken = (string) Str::uuid();
-        session(['checkout_idempotency_token' => $checkoutToken]);
+        $checkoutToken = app(CheckoutIdempotencyService::class)->issue(auth()->id());
 
         return view('checkout', compact(
             'cart',
@@ -182,10 +183,14 @@ class CheckoutController extends Controller
      * Create order + items in a DB transaction, optionally save address, clear cart.
      *
      * Side effects: locks product rows, decrements stock, increments sold_count.
+     * Checkout token consumption is atomic with order creation (lockForUpdate).
      * Rate-limited at the route layer (throttle:10,1).
      */
-    public function place(Request $request, PaymentService $payments): RedirectResponse
-    {
+    public function place(
+        Request $request,
+        PaymentService $payments,
+        CheckoutIdempotencyService $checkoutIds
+    ): RedirectResponse {
         $sessionCart = session('cart', []);
 
         if (empty($sessionCart)) {
@@ -204,23 +209,16 @@ class CheckoutController extends Controller
             'payment_method' => ['required', 'string', Rule::in($paymentKeys)],
             'shipping_method' => 'required|in:standard,express,pickup',
             'save_address' => 'nullable|boolean',
-            'checkout_token' => 'required|string',
+            'checkout_token' => 'required|string|max:64',
         ]);
 
-        $expectedToken = session('checkout_idempotency_token');
-        $submittedToken = (string) $data['checkout_token'];
-
-        if (! is_string($expectedToken) || $expectedToken === '' || ! hash_equals($expectedToken, $submittedToken)) {
-            return redirect()
-                ->route('checkout')
-                ->with('error', 'This checkout session has already been used or expired. Please review your cart and try again.');
-        }
-
-        // Consume only after validation so bad input can retry with the same token.
-        session()->forget('checkout_idempotency_token');
-
         try {
-            $order = DB::transaction(function () use ($sessionCart, $data) {
+            $order = DB::transaction(function () use ($sessionCart, $data, $checkoutIds) {
+                $idempotencyKey = $checkoutIds->lockConsumable(
+                    $data['checkout_token'],
+                    (int) auth()->id()
+                );
+
                 $lines = [];
                 $subtotal = 0.0;
 
@@ -321,13 +319,19 @@ class CheckoutController extends Controller
                     $product->increment('sold_count', $line['quantity']);
                 }
 
+                $checkoutIds->markConsumed($idempotencyKey, (int) $order->id);
+
                 return $order;
             });
-        } catch (\RuntimeException $e) {
-            // Allow a fresh checkout attempt after a failed placement.
-            $retryToken = (string) Str::uuid();
-            session(['checkout_idempotency_token' => $retryToken]);
+        } catch (InvalidArgumentException $e) {
+            if (str_contains($e->getMessage(), 'already processed')) {
+                return redirect()
+                    ->route('account.orders')
+                    ->with('success', 'Your order was already placed. No duplicate order was created.');
+            }
 
+            return redirect()->route('checkout')->with('error', $e->getMessage());
+        } catch (\RuntimeException $e) {
             return redirect()->route('cart.index')->with('error', $e->getMessage());
         }
 

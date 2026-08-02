@@ -5,8 +5,8 @@ namespace Tests\Feature;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\User;
+use App\Services\CheckoutIdempotencyService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Str;
 use Tests\Support\CreatesMarketplace;
 use Tests\TestCase;
 
@@ -19,14 +19,13 @@ class CheckoutSecurityTest extends TestCase
      * @param  array<string, mixed>  $cart
      * @param  array<string, mixed>  $payload
      */
-    protected function placeCheckout(User $user, array $cart, array $payload)
+    protected function placeCheckout(User $user, array $cart, array $payload, ?string $token = null)
     {
-        $token = (string) Str::uuid();
+        $token ??= app(CheckoutIdempotencyService::class)->issue($user);
 
         return $this->actingAs($user)
             ->withSession([
                 'cart' => $cart,
-                'checkout_idempotency_token' => $token,
             ])
             ->post(route('checkout.place'), array_merge($payload, [
                 'checkout_token' => $token,
@@ -100,7 +99,7 @@ class CheckoutSecurityTest extends TestCase
         $user = User::factory()->create();
         [, $vendor] = $this->createVendorUser();
         $product = $this->createProductForVendor($vendor);
-        $token = (string) Str::uuid();
+        $token = app(CheckoutIdempotencyService::class)->issue($user);
 
         $this->actingAs($user)
             ->withSession([
@@ -113,7 +112,6 @@ class CheckoutSecurityTest extends TestCase
                         'brand' => null,
                     ],
                 ],
-                'checkout_idempotency_token' => $token,
             ])
             ->from(route('checkout'))
             ->post(route('checkout.place'), [

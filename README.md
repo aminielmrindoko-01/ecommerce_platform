@@ -64,18 +64,24 @@ Email/SMS delivery, payment gateways, payouts, and shipping-provider APIs remain
 
 ## Payment Operations Foundation
 
-Payment charging is **not** live. Phase 5 adds a secure operations layer for recording and administering payment state:
+Payment charging is **not** live. Phase 5–6 add a secure operations layer for recording and administering payment state:
 
 * `orders.payment_status` — dedicated payment lifecycle (`pending`, `processing`, `paid`, `failed`, `cancelled`, `refunded`, `partially_refunded`)
-* `orders.status` — unchanged legacy admin/order lifecycle (`pending`, `paid`, `shipped`, `completed`)
+* `orders.status` — coarse admin/order lifecycle only (`pending`, `shipped`, `completed`; `paid` is set via `PaymentService` soft-sync, not the legacy status endpoint)
 * `payment_transactions` — order-level records (`manual` / `stub` providers only) with unique `reference` and unique `provider_reference`
-* `PaymentService` — central state machine with `lockForUpdate()`, amount/currency checks against `order.total_price`, idempotent provider references, and audit history
+* `PaymentService` — central state machine with `lockForUpdate()`, decimal-safe (`bccomp`/`bcadd`) amount/currency checks against `order.total_price`, strict provider-reference conflict handling, and audit history
 * Admin payment updates via `PATCH /admin/orders/{order}/payment` (auth + admin + policy + FormRequest)
 * Customer-visible payment status/reference on own orders only
-* Checkout initializes `payment_status=pending` and a stub pending transaction; checkout form uses a one-time idempotency token
-* Database notifications for payment successful / failed / cancelled
+* Checkout initializes `payment_status=pending` and a stub pending transaction
+* Checkout idempotency uses DB-backed one-time tokens (`checkout_idempotency_keys`) consumed atomically with `lockForUpdate()` inside the order transaction
+* `PaymentGatewayInterface` + `StubPaymentGateway` — architecture readiness only (no live charging)
+* Database notifications for payment successful / failed / cancelled (dispatched after commit)
 
-Vendors cannot mutate payments. Live M-Pesa/card/PayPal charging, payouts, commissions, wallets, and full refund workflows remain out of scope.
+Vendors cannot mutate payments. Live M-Pesa/card/PayPal charging, webhooks, payouts, commissions, wallets, and full refund workflows remain out of scope.
+
+### Future webhook requirements (not implemented)
+
+When real gateways are added, webhooks must include: signature verification, provider reference validation, replay protection, idempotency, amount/currency verification, order/payment lookup under row locks, audit history, and after-commit notifications. Browser-submitted payment success must never be trusted.
 
 ## Technology Stack
 
@@ -95,7 +101,8 @@ Vendors cannot mutate payments. Live M-Pesa/card/PayPal charging, payouts, commi
 | Controllers | `app/Http/Controllers/`, `app/Http/Controllers/Vendor/` |
 | Middleware | `admin`, `vendor`, `role`, marketplace preferences |
 | Policies | `ProductPolicy`, `VendorPolicy`, `OrderItemPolicy` |
-| Services | `OrderItemFulfillmentService`, `OrderFulfillmentSummary` |
+| Services | `OrderItemFulfillmentService`, `OrderFulfillmentSummary`, `PaymentService`, `CheckoutIdempotencyService` |
+| Payment gateways | `app/Contracts/PaymentGatewayInterface.php`, `app/Support/Payments/` (stub only) |
 | Notifications | Database channel (`app/Notifications/`) |
 | Events / Listeners | `OrderItemStatusChanged`, `OrderPlaced` + listeners |
 | Models | `app/Models/` |

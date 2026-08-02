@@ -218,12 +218,18 @@ class AdminController extends Controller
         return back()->with('success', 'Payment status updated.');
     }
 
+    /**
+     * Update legacy coarse order lifecycle only.
+     *
+     * Payment "paid" must go through PaymentService / updateOrderPayment.
+     * `paid` is intentionally excluded from this endpoint.
+     */
     public function updateOrderStatus(Request $request, $id): RedirectResponse
     {
         $order = Order::findOrFail($id);
 
         $request->validate([
-            'status' => 'required|in:pending,paid,shipped,completed',
+            'status' => 'required|in:pending,shipped,completed',
         ]);
 
         $order->status = $request->status;
