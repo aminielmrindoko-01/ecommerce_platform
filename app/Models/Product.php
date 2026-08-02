@@ -18,8 +18,14 @@ use Illuminate\Support\Str;
  */
 class Product extends Model
 {
+    /**
+     * Mass-assignable catalog fields.
+     * Aggregates (rating_avg, rating_count, sold_count) are not fillable —
+     * they are updated only by review/checkout server logic.
+     *
+     * @var list<string>
+     */
     protected $fillable = [
-        'vendor_id',
         'category_id',
         'name',
         'slug',
@@ -27,8 +33,6 @@ class Product extends Model
         'price',
         'compare_at_price',
         'stock',
-        'rating_avg',
-        'rating_count',
         'is_featured',
         'is_flash_sale',
         'flash_ends_at',
@@ -39,7 +43,6 @@ class Product extends Model
         'specs',
         'variants',
         'sku',
-        'sold_count',
     ];
 
     /**

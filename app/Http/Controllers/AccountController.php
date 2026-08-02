@@ -13,8 +13,10 @@ namespace App\Http\Controllers;
 use App\Models\Address;
 use App\Models\Order;
 use App\Models\Wishlist;
+use App\Services\OrderFulfillmentSummary;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
@@ -52,13 +54,35 @@ class AccountController extends Controller
 
     /**
      * Single order detail — owner only.
+     * Items are grouped by vendor for multi-vendor fulfillment visibility.
      */
-    public function showOrder(Order $order): View
+    public function showOrder(Order $order, OrderFulfillmentSummary $summary): View
     {
         abort_unless($order->user_id === auth()->id(), 403);
-        $order->load('items.product');
+        $order->load(['items.product.vendor']);
 
-        return view('account.order-show', compact('order'));
+        $itemsByVendor = $order->items
+            ->groupBy(fn ($item) => $item->product?->vendor_id ?? 0)
+            ->map(function ($items) {
+                $vendor = $items->first()?->product?->vendor;
+
+                return [
+                    'vendor' => $vendor,
+                    'store_name' => $vendor?->store_name ?? 'Seller',
+                    'items' => $items,
+                ];
+            })
+            ->values();
+
+        $fulfillmentSummary = $summary->summarize($order);
+        $fulfillmentSummaryLabel = $summary->label($fulfillmentSummary);
+
+        return view('account.order-show', compact(
+            'order',
+            'itemsByVendor',
+            'fulfillmentSummary',
+            'fulfillmentSummaryLabel'
+        ));
     }
 
     /**
@@ -134,7 +158,7 @@ class AccountController extends Controller
             'name' => 'required|string|max:120',
             'email' => 'required|email|unique:users,email,'.$user->id,
             'phone' => 'nullable|string|max:40',
-            'avatar' => 'nullable|image|max:2048',
+            'avatar' => 'nullable|image|mimes:jpg,jpeg,png,webp,gif|max:2048',
         ]);
 
         if ($request->hasFile('avatar')) {
@@ -175,14 +199,42 @@ class AccountController extends Controller
     /**
      * Static notification placeholders (no notification store yet).
      */
+    /**
+     * Real database notifications for the authenticated user only.
+     */
     public function notifications(): View
     {
-        $notifications = [
-            ['title' => 'Welcome to SANA Market', 'body' => 'Explore deals from verified sellers today.', 'time' => 'Just now'],
-            ['title' => 'Flash sale reminder', 'body' => 'Electronics flash sale ends tonight.', 'time' => '2h ago'],
-        ];
+        $user = auth()->user();
+        $notifications = $user->notifications()->latest()->paginate(20);
+        $unreadCount = $user->unreadNotifications()->count();
 
-        return view('account.notifications', compact('notifications'));
+        return view('account.notifications', compact('notifications', 'unreadCount'));
+    }
+
+    /**
+     * Mark one owned notification as read.
+     */
+    public function markNotificationRead(string $notification): RedirectResponse
+    {
+        /** @var DatabaseNotification $row */
+        $row = auth()->user()
+            ->notifications()
+            ->whereKey($notification)
+            ->firstOrFail();
+
+        $row->markAsRead();
+
+        return back()->with('success', 'Notification marked as read.');
+    }
+
+    /**
+     * Mark all owned notifications as read.
+     */
+    public function markAllNotificationsRead(): RedirectResponse
+    {
+        auth()->user()->unreadNotifications->markAsRead();
+
+        return back()->with('success', 'All notifications marked as read.');
     }
 
     /**

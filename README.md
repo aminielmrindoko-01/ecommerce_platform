@@ -1,59 +1,200 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# SANA Market — E-Commerce Marketplace
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Laravel marketplace for browsing products, managing a session cart, placing orders, and administering catalog/order operations from an admin console. Vendors manage their own stores and products through a dedicated seller hub.
 
-## About Laravel
+## Overview
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+SANA Market is a multi-vendor storefront focused on East African shopping preferences (locale, currency display, country tax). Customers can register, browse the catalog, manage a cart, check out, and track their orders. Vendors manage their own products and view orders containing their items. Admins retain global marketplace control.
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Features
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+* Customer authentication (register, login, logout, password change)
+* Role-based access (`customer`, `vendor`, `admin`) with `admin` and `vendor` middleware
+* Multi-vendor marketplace with ownership via `vendors.user_id` → `products.vendor_id`
+* Vendor dashboard, product CRUD, order isolation, and store profile
+* Admin global product create/update/delete and vendor verification
+* Session shopping cart with stock clamping and live price sync
+* Checkout with server-side price/stock validation (payment gateways stubbed)
+* Order history with ownership checks (IDOR protection)
+* Admin dashboard (KPIs, orders, users, vendors, inventory, coupons, reviews)
+* Localization, currency display conversion, and country preference cookies
+* SEO helpers (sitemap, robots, Open Graph, JSON-LD)
+* Secure image uploads (`jpg`, `jpeg`, `png`, `webp`, `gif`)
+* PHPUnit feature tests for auth, authorization, cart, checkout, and vendor IDOR
 
-## Learning Laravel
+## Vendor Marketplace
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+* Each vendor store is linked to exactly one user (`vendors.user_id`, unique FK)
+* Vendors access `/vendor` (dashboard, products, orders, profile)
+* Product create/update/delete is ownership-scoped: `products.vendor_id` must match the authenticated vendor
+* `vendor_id` is never accepted from vendor forms — the server assigns ownership
+* Vendor order views show only that vendor’s line items and a vendor subtotal (not the full multi-vendor order total)
+* Customers cannot access vendor routes; admins use `/admin` instead of the seller hub
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+## Multi-Vendor Fulfillment
 
-## Laravel Sponsors
+Order payment/admin lifecycle and vendor fulfillment are intentionally separate:
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+| Field | Purpose | Values |
+|-------|---------|--------|
+| `orders.status` | Overall order / payment / admin lifecycle | `pending`, `paid`, `shipped`, `completed` |
+| `order_items.fulfillment_status` | Per-vendor line-item fulfillment | `pending`, `confirmed`, `processing`, `shipped`, `delivered`, `cancelled` |
 
-### Premium Partners
+* There is **no** `orders.vendor_id`. Ownership is derived from `order_item → product.vendor_id → vendor.user_id`.
+* Vendors update fulfillment only for their own line items via `PATCH /vendor/orders/{order}/items/{orderItem}/fulfillment`.
+* Transitions are enforced by `OrderItemFulfillmentService` (e.g. `pending → confirmed → processing → shipped → delivered`; cancel from `pending` or `confirmed` only).
+* Customers can view fulfillment status on their order page (grouped by vendor) but cannot change it.
+* Admins see order status and each item’s fulfillment status in `/admin/orders`.
+* Vendor dashboards show fulfillment KPI counts for their own items only.
+* Cross-vendor IDOR attempts return `403`; price, quantity, product, and order ownership fields are not mass-assignable from fulfillment requests.
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+## Marketplace Operations
 
-## Contributing
+Operational workflows built on top of per-item fulfillment:
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+* **Database notifications** — customers receive fulfillment updates; vendors receive new-order and cancellation alerts (`notifications` table, account inbox at `/account/notifications`)
+* **Fulfillment audit history** — every successful status change writes `fulfillment_status_histories` (actor, role, from/to, optional reason)
+* **Concurrency-safe transitions** — `OrderItemFulfillmentService` uses transactions + `lockForUpdate()` before applying changes
+* **Admin overrides** — admins may use an explicit broader transition map via `PATCH /admin/orders/{order}/items/{orderItem}/fulfillment` (reason required for reopen and late cancellations)
+* **Dynamic fulfillment summary** — `OrderFulfillmentSummary` computes display-only aggregate state from line items (not stored; separate from `orders.status`)
+* **Customer tracking** — order detail shows vendor grouping, progress steps, and the computed fulfillment summary
+* **Vendor Needs Action** — dashboard queue for pending/confirmed/processing items; order list supports `?fulfillment=` filtering
 
-## Code of Conduct
+Email/SMS delivery, payment gateways, payouts, and shipping-provider APIs remain out of scope.
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+## Technology Stack
 
-## Security Vulnerabilities
+* PHP 8.2+
+* Laravel 12
+* MySQL (intended production/local database)
+* Blade templates
+* JavaScript (Vite)
+* CSS
+* PHPUnit
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+## Architecture
+
+| Area | Location |
+|------|----------|
+| HTTP routes | `routes/shop.php`, `routes/admin.php`, `routes/vendor.php` |
+| Controllers | `app/Http/Controllers/`, `app/Http/Controllers/Vendor/` |
+| Middleware | `admin`, `vendor`, `role`, marketplace preferences |
+| Policies | `ProductPolicy`, `VendorPolicy`, `OrderItemPolicy` |
+| Services | `OrderItemFulfillmentService`, `OrderFulfillmentSummary` |
+| Notifications | Database channel (`app/Notifications/`) |
+| Events / Listeners | `OrderItemStatusChanged`, `OrderPlaced` + listeners |
+| Models | `app/Models/` |
+| Marketplace helpers | `app/Support/Marketplace.php`, `app/helpers.php` |
+| Views | `resources/views/` (including `vendor/`) |
+| Migrations / seeders | `database/migrations/`, `database/seeders/` |
+| Tests | `tests/Feature/`, `tests/Unit/` |
+
+Cart and coupon state live in the session. Order placement recalculates line prices and stock from the database inside a transaction.
+
+## Installation
+
+```bash
+git clone <repository-url>
+cd ecommerce_platform
+composer install
+cp .env.example .env
+php artisan key:generate
+```
+
+### Database (MySQL)
+
+Create an empty MySQL database, then set credentials in `.env`:
+
+```env
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=ecommerce_platform
+DB_USERNAME=root
+DB_PASSWORD=
+```
+
+Then run:
+
+```bash
+php artisan migrate
+php artisan db:seed
+npm install
+npm run build
+php artisan storage:link
+php artisan serve
+```
+
+Visit `http://127.0.0.1:8000`.
+
+### Demo accounts (local seeding only)
+
+After `php artisan db:seed`:
+
+| Email | Password | Role | Notes |
+|-------|----------|------|-------|
+| `admin@example.com` | `password` | admin | Full `/admin` console |
+| `test@example.com` | `password` | customer | Storefront buyer |
+| `seller@example.com` | `password` | vendor | Linked to Tech Haven store |
+| `fashion@example.com` | `password` | vendor | Linked to Fashion Plus store |
+
+Do not use these credentials in production.
+
+## Testing
+
+Tests use SQLite in-memory (`phpunit.xml`) and do not require MySQL.
+
+```bash
+php artisan test
+```
+
+## Security
+
+Implemented protections include:
+
+* Admin routes gated by `auth` + `admin` middleware
+* Vendor routes gated by `auth` + `vendor` middleware (requires linked store)
+* Product mutations authorized by policy (admin global, vendor ownership)
+* Vendor forms cannot set or change `vendor_id`
+* Checkout totals calculated from live product rows (session prices ignored)
+* Stock locked with `lockForUpdate()` during order placement
+* Order confirmation / account / vendor order views enforce ownership isolation
+* Vendor fulfillment updates authorized by `OrderItemPolicy` + state machine (cross-vendor IDOR blocked)
+* Admin fulfillment overrides require admin middleware + policy + explicit transition/reason rules
+* Notification mark-as-read scoped to authenticated notifiable ownership
+* Registration always creates `customer` role
+* CSRF protection on web forms
+* Throttling on login, register, checkout, contact, reviews, and questions
+* Upload MIME allow-lists for product/avatar images
+* XSS hardening in search/recently-viewed JavaScript (DOM APIs / URL checks)
+
+Payment charging is **not** integrated — selected methods are recorded and orders remain `pending` until a real gateway is added.
+
+## Project Structure
+
+```text
+app/Http/Controllers         Storefront, account, checkout, admin
+app/Http/Controllers/Vendor  Vendor dashboard, products, orders, profile
+app/Http/Middleware          Admin, vendor, role, marketplace preferences
+app/Models                   Eloquent models (User ↔ Vendor ↔ Product)
+app/Policies                 ProductPolicy, VendorPolicy, OrderItemPolicy
+app/Services                 OrderItemFulfillmentService
+database/migrations          Schema (MySQL-oriented)
+database/seeders             Demo users + marketplace catalog
+resources/views/vendor       Seller hub UI
+tests/Feature                Security and functional regression tests
+```
+
+## Future Improvements
+
+1. Real payment gateway integration (M-Pesa / card)
+2. Admin create/update UI for categories, coupons, and inventory adjustments
+3. Email notifications and password reset flow
+4. Persistent cart for authenticated users
+5. Stronger content moderation for reviews/questions
+6. Vendor payout / commission reporting
+7. Docker Compose for one-command local MySQL + app setup
 
 ## License
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+This project is open-sourced under the MIT license.

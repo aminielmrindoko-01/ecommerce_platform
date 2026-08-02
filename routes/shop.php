@@ -25,10 +25,10 @@ Route::get('/', [HomeController::class, 'index'])->name('home');
 
 Route::get('/products', [ProductController::class, 'index'])->name('products.index');
 Route::get('/product/{id}', [ProductController::class, 'show'])->name('products.show');
-Route::post('/product/{id}/reviews', [ProductController::class, 'storeReview'])->name('products.reviews.store');
-Route::post('/product/{id}/questions', [ProductController::class, 'storeQuestion'])->name('products.questions.store');
+Route::post('/product/{id}/reviews', [ProductController::class, 'storeReview'])->middleware('throttle:10,1')->name('products.reviews.store');
+Route::post('/product/{id}/questions', [ProductController::class, 'storeQuestion'])->middleware('throttle:10,1')->name('products.questions.store');
 
-Route::middleware('auth')->group(function () {
+Route::middleware(['auth', 'admin'])->group(function () {
     Route::get('/products/create', [ProductController::class, 'create'])->name('products.create');
     Route::post('/products', [ProductController::class, 'store'])->name('products.store');
     Route::get('/products/{id}/edit', [ProductController::class, 'edit'])->name('products.edit');
@@ -81,6 +81,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/account/security', [AccountController::class, 'security'])->name('account.security');
     Route::put('/account/password', [AccountController::class, 'updatePassword'])->name('account.password.update');
     Route::get('/account/notifications', [AccountController::class, 'notifications'])->name('account.notifications');
+    Route::post('/account/notifications/{notification}/read', [AccountController::class, 'markNotificationRead'])
+        ->name('account.notifications.read');
+    Route::post('/account/notifications/read-all', [AccountController::class, 'markAllNotificationsRead'])
+        ->name('account.notifications.readAll');
     Route::get('/account/wishlist', [AccountController::class, 'wishlist'])->name('account.wishlist');
 
     Route::get('/wishlist', [WishlistController::class, 'index'])->name('wishlist.index');

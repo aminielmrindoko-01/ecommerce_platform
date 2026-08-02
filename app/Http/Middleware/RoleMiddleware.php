@@ -2,10 +2,10 @@
 
 /**
  * |--------------------------------------------------------------------------
- * | Role middleware (placeholder)
+ * | Role middleware
  * |--------------------------------------------------------------------------
- * | Registered for future role-based route constraints. Currently a no-op
- * | pass-through — admin checks use AdminMiddleware instead.
+ * | Restricts access to users whose `role` matches one of the given roles.
+ * | Admin routes prefer the dedicated `admin` alias (AdminMiddleware).
  */
 
 namespace App\Http\Middleware;
@@ -15,19 +15,28 @@ use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Intended for role-parameterized authorization; presently does not enforce roles.
+ * Role-parameterized authorization for route groups.
  *
  * @package App\Http\Middleware
  */
 class RoleMiddleware
 {
     /**
-     * Pass the request through unchanged.
+     * Abort unless the authenticated user has one of the allowed roles.
      *
      * @param  Closure(Request): (Response)  $next
+     * @param  string  ...$roles
+     *
+     * @throws \Symfony\Component\HttpKernel\Exception\HttpException
      */
-    public function handle(Request $request, Closure $next): Response
+    public function handle(Request $request, Closure $next, string ...$roles): Response
     {
+        $user = $request->user();
+
+        if (! $user || ($roles !== [] && ! in_array($user->role, $roles, true))) {
+            abort(403, 'Unauthorized access');
+        }
+
         return $next($request);
     }
 }

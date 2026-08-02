@@ -7,6 +7,7 @@ use App\Models\Coupon;
 use App\Models\Product;
 use App\Models\ProductQuestion;
 use App\Models\Review;
+use App\Models\User;
 use App\Models\Vendor;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Str;
@@ -50,6 +51,28 @@ class MarketplaceSeeder extends Seeder
             ['store_name' => 'Beauty & Wellness', 'email' => 'beauty@sana.com', 'description' => 'Clean beauty and self-care', 'location' => 'Dodoma', 'is_verified' => false, 'rating_avg' => 4.4, 'logo' => 'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?auto=format&fit=crop&w=200&q=80'],
             ['store_name' => 'Apple Authorized', 'email' => 'apple@sana.com', 'description' => 'Genuine Apple products & accessories', 'location' => 'Dar es Salaam', 'is_verified' => true, 'rating_avg' => 4.9, 'logo' => 'https://images.unsplash.com/photo-1611186871348-b1ce696e52c9?auto=format&fit=crop&w=200&q=80'],
         ])->map(fn ($v) => Vendor::create($v))->keyBy('store_name');
+
+        // Link demo seller account to Tech Haven (1:1 ownership). user_id is not fillable.
+        $seller = User::where('email', 'seller@example.com')->first();
+        if ($seller) {
+            $techHaven = $vendors['Tech Haven'];
+            $techHaven->user_id = $seller->id;
+            $techHaven->save();
+        }
+
+        // Second linked vendor account for local multi-vendor demos / IDOR checks.
+        $fashionSeller = User::updateOrCreate(
+            ['email' => 'fashion@example.com'],
+            [
+                'name' => 'Fashion Seller',
+                'password' => 'password',
+                'role' => 'vendor',
+                'phone' => '+255700000004',
+            ]
+        );
+        $fashionPlus = $vendors['Fashion Plus'];
+        $fashionPlus->user_id = $fashionSeller->id;
+        $fashionPlus->save();
 
         $products = [
             [
@@ -233,8 +256,7 @@ class MarketplaceSeeder extends Seeder
         $flashEnd = now()->addHours(18);
 
         foreach ($products as $data) {
-            $product = Product::create([
-                'vendor_id' => $vendors[$data['vendor']]->id,
+            $product = new Product([
                 'category_id' => $categories[$data['category']]->id,
                 'name' => $data['name'],
                 'slug' => Str::slug($data['name']).'-'.Str::lower(Str::random(4)),
@@ -242,7 +264,6 @@ class MarketplaceSeeder extends Seeder
                 'price' => $data['price'],
                 'compare_at_price' => $data['compare_at_price'],
                 'stock' => $data['stock'],
-                'sold_count' => $data['sold_count'],
                 'is_featured' => $data['is_featured'],
                 'is_flash_sale' => $data['is_flash_sale'],
                 'flash_ends_at' => $data['is_flash_sale'] ? $flashEnd : null,
@@ -253,9 +274,16 @@ class MarketplaceSeeder extends Seeder
                 'specs' => $data['specs'],
                 'variants' => $data['variants'],
                 'sku' => 'SKU-'.strtoupper(Str::random(8)),
+            ]);
+            $product->vendor_id = $vendors[$data['vendor']]->id;
+            $product->save();
+
+            // Aggregates are guarded from mass assignment; set explicitly for demo data.
+            $product->forceFill([
+                'sold_count' => $data['sold_count'],
                 'rating_avg' => round(mt_rand(40, 50) / 10, 1),
                 'rating_count' => mt_rand(12, 240),
-            ]);
+            ])->save();
 
             Review::create([
                 'product_id' => $product->id,

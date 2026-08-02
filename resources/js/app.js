@@ -1,4 +1,3 @@
-
 /**
  * Storefront progressive enhancement: hero carousel, flash countdowns,
  * recently-viewed (localStorage + API), toast auto-dismiss, search typeahead.
@@ -14,6 +13,20 @@ document.addEventListener('DOMContentLoaded', () => {
     initToastDismiss();
     initSearchSuggest();
 });
+
+/**
+ * Allow only same-origin relative paths or http(s) URLs for href/src attributes.
+ */
+function safeUrl(value, fallback = '#') {
+    const url = String(value ?? '').trim();
+    if (url.startsWith('/') && !url.startsWith('//')) {
+        return url;
+    }
+    if (/^https?:\/\//i.test(url)) {
+        return url;
+    }
+    return fallback;
+}
 
 /**
  * Rotate `[data-hero-slide]` panels every 5.5s; dots jump to a specific slide.
@@ -51,11 +64,13 @@ function initFlashCountdowns() {
             const h = Math.floor(diff / 3600000);
             const m = Math.floor((diff % 3600000) / 60000);
             const s = Math.floor((diff % 60000) / 1000);
-            el.innerHTML = `
-                <span class="flash-unit">${String(h).padStart(2, '0')}</span>
-                <span class="flash-unit">${String(m).padStart(2, '0')}</span>
-                <span class="flash-unit">${String(s).padStart(2, '0')}</span>
-            `;
+            el.replaceChildren();
+            [h, m, s].forEach((unit) => {
+                const span = document.createElement('span');
+                span.className = 'flash-unit';
+                span.textContent = String(unit).padStart(2, '0');
+                el.appendChild(span);
+            });
             if (diff <= 0) clearInterval(timer);
         };
 
@@ -95,21 +110,43 @@ function initRecentlyViewed() {
         .then((r) => (r.ok ? r.json() : []))
         .then((items) => {
             if (!Array.isArray(items) || !items.length) return;
-            mount.innerHTML = items
-                .map(
-                    (p) => `
-                <a href="${p.url}" class="product-card">
-                    <div class="product-card-media">
-                        <img src="${p.image}" alt="${p.name}" loading="lazy" width="400" height="400">
-                    </div>
-                    <div class="product-card-body">
-                        <div class="product-brand">${p.brand || 'SANA'}</div>
-                        <h3 class="product-name">${p.name}</h3>
-                        <div class="price">TSh ${Number(p.price).toLocaleString()}</div>
-                    </div>
-                </a>`
-                )
-                .join('');
+            mount.replaceChildren();
+            items.forEach((p) => {
+                const href = safeUrl(p.url, '/products');
+                const image = safeUrl(p.image, '/favicon.ico');
+                const card = document.createElement('a');
+                card.href = href;
+                card.className = 'product-card';
+
+                const media = document.createElement('div');
+                media.className = 'product-card-media';
+                const img = document.createElement('img');
+                img.src = image;
+                img.alt = String(p.name ?? 'Product');
+                img.loading = 'lazy';
+                img.width = 400;
+                img.height = 400;
+                media.appendChild(img);
+
+                const body = document.createElement('div');
+                body.className = 'product-card-body';
+
+                const brand = document.createElement('div');
+                brand.className = 'product-brand';
+                brand.textContent = p.brand || 'SANA';
+
+                const name = document.createElement('h3');
+                name.className = 'product-name';
+                name.textContent = p.name || 'Product';
+
+                const price = document.createElement('div');
+                price.className = 'price';
+                price.textContent = `TSh ${Number(p.price).toLocaleString()}`;
+
+                body.append(brand, name, price);
+                card.append(media, body);
+                mount.appendChild(card);
+            });
         })
         .catch(() => {});
 }
@@ -142,7 +179,7 @@ function initSearchSuggest() {
         const q = input.value.trim();
         if (q.length < 2) {
             box.hidden = true;
-            box.innerHTML = '';
+            box.replaceChildren();
             return;
         }
         timer = setTimeout(() => {
@@ -154,12 +191,21 @@ function initSearchSuggest() {
                         return;
                     }
                     box.hidden = false;
-                    box.innerHTML = items
-                        .map(
-                            (item) =>
-                                `<a href="${item.url}" role="option">${item.name} <span style="color:var(--color-ink-muted)">${item.brand || ''}</span></a>`
-                        )
-                        .join('');
+                    box.replaceChildren();
+                    items.forEach((item) => {
+                        const link = document.createElement('a');
+                        link.href = safeUrl(item.url, '/products');
+                        link.setAttribute('role', 'option');
+                        link.appendChild(document.createTextNode(item.name || 'Product'));
+                        if (item.brand) {
+                            link.appendChild(document.createTextNode(' '));
+                            const span = document.createElement('span');
+                            span.style.color = 'var(--color-ink-muted)';
+                            span.textContent = item.brand;
+                            link.appendChild(span);
+                        }
+                        box.appendChild(link);
+                    });
                 })
                 .catch(() => {
                     box.hidden = true;

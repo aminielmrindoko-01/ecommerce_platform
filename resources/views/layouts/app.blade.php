@@ -44,7 +44,7 @@
             'availableLanguage' => ['English', 'Swahili', 'French'],
         ],
         'sameAs' => [],
-    ], JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE) !!}
+    ], JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE|JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) !!}
     </script>
     @stack('head')
 </head>
@@ -111,6 +111,9 @@
                     <a class="nav-link {{ request()->routeIs('account.*') || request()->routeIs('profile') ? 'is-active' : '' }}" href="{{ route('account.index') }}">{{ mt('nav.account') }}</a>
                     @if(auth()->user()->isAdmin())
                         <a class="nav-link" href="{{ route('admin.dashboard') }}">{{ mt('nav.admin') }}</a>
+                    @endif
+                    @if(auth()->user()->isVendor() && auth()->user()->vendor)
+                        <a class="nav-link {{ request()->routeIs('vendor.*') ? 'is-active' : '' }}" href="{{ route('vendor.dashboard') }}">Seller hub</a>
                     @endif
                     <form method="POST" action="{{ route('logout') }}" style="display:inline;">
                         @csrf

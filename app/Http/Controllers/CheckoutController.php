@@ -4,13 +4,14 @@
  * |--------------------------------------------------------------------------
  * | Checkout & order placement
  * |--------------------------------------------------------------------------
- * | Auth-only. Recalculates totals server-side (never trust client totals).
- * | Payment gateways are stubbed — orders stay `pending` after place().
- * | Stock decrement is conditional on sufficient stock at write time.
+ * | Auth-only. Recalculates totals from live product rows (never trust session
+ * | prices). Payment gateways are stubbed — orders stay `pending` after place().
+ * | Stock is locked and decremented atomically; insufficient stock aborts.
  */
 
 namespace App\Http\Controllers;
 
+use App\Events\OrderPlaced;
 use App\Models\Address;
 use App\Models\Coupon;
 use App\Models\Order;
@@ -21,6 +22,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 /**
@@ -31,21 +33,114 @@ use Illuminate\View\View;
 class CheckoutController extends Controller
 {
     /**
+     * Allowed payment method keys shown on the checkout form (integrations stubbed).
+     *
+     * @return array<string, string>
+     */
+    protected function paymentMethods(): array
+    {
+        return [
+            'card' => 'Visa / Mastercard / Amex',
+            'paypal' => 'PayPal',
+            'apple_pay' => 'Apple Pay',
+            'google_pay' => 'Google Pay',
+            'stripe' => 'Stripe',
+            'mpesa' => 'M-Pesa',
+            'airtel' => 'Airtel Money',
+            'tigo' => 'Tigo Pesa',
+            'halopesa' => 'HaloPesa',
+            'mixx' => 'Mixx by Yas',
+            'mtn' => 'MTN MoMo',
+            'orange' => 'Orange Money',
+            'bank' => 'Bank transfer',
+            'cod' => 'Cash on delivery',
+        ];
+    }
+
+    /**
+     * Rebuild cart lines from the database so session prices cannot be trusted.
+     *
+     * @param  array<int|string, array<string, mixed>>  $sessionCart
+     * @return array{lines: array<int, array{product: Product, quantity: int, unit_price: float, line_total: float}>, errors: list<string>}
+     */
+    protected function resolveCartFromDatabase(array $sessionCart): array
+    {
+        $lines = [];
+        $errors = [];
+
+        foreach ($sessionCart as $productId => $item) {
+            $product = Product::query()->find($productId);
+
+            if (! $product) {
+                $errors[] = 'A product in your cart is no longer available.';
+                continue;
+            }
+
+            $quantity = max(1, (int) ($item['quantity'] ?? 1));
+
+            if ($product->stock < 1) {
+                $errors[] = "{$product->name} is out of stock.";
+                continue;
+            }
+
+            if ($quantity > $product->stock) {
+                $errors[] = "{$product->name} only has {$product->stock} in stock.";
+                $quantity = $product->stock;
+            }
+
+            $unitPrice = (float) $product->price;
+            $lines[] = [
+                'product' => $product,
+                'quantity' => $quantity,
+                'unit_price' => $unitPrice,
+                'line_total' => $unitPrice * $quantity,
+            ];
+        }
+
+        return compact('lines', 'errors');
+    }
+
+    /**
      * Show checkout with address book, shipping options, tax, and payment methods.
      */
     public function show(): View|RedirectResponse
     {
-        $cart = session('cart', []);
+        $sessionCart = session('cart', []);
 
-        if (empty($cart)) {
+        if (empty($sessionCart)) {
             return redirect()->route('cart.index')->with('error', 'Your cart is empty.');
         }
+
+        $resolved = $this->resolveCartFromDatabase($sessionCart);
+
+        if (empty($resolved['lines'])) {
+            session()->forget('cart');
+
+            return redirect()->route('cart.index')->with('error', 'Your cart is empty or no longer available.');
+        }
+
+        if (! empty($resolved['errors'])) {
+            return redirect()->route('cart.index')->with('error', implode(' ', $resolved['errors']));
+        }
+
+        $cart = [];
+        foreach ($resolved['lines'] as $line) {
+            $product = $line['product'];
+            $cart[$product->id] = [
+                'name' => $product->name,
+                'price' => $line['unit_price'],
+                'quantity' => $line['quantity'],
+                'image' => $product->image_url,
+                'brand' => $product->brand,
+            ];
+        }
+        session(['cart' => $cart]);
 
         $addresses = auth()->user()?->addresses()->latest()->get() ?? collect();
         $couponCode = session('coupon_code');
         $coupon = $couponCode ? Coupon::where('code', $couponCode)->first() : null;
 
-        $subtotal = collect($cart)->sum(fn ($item) => $item['price'] * $item['quantity']);
+        $subtotal = collect($resolved['lines'])->sum('line_total');
         $discount = $coupon ? $coupon->discountFor($subtotal) : 0;
         $shippingOptions = [
             'standard' => ['label' => 'Standard (3–5 days)', 'cost' => $subtotal >= 150000 ? 0 : 8000],
@@ -81,16 +176,18 @@ class CheckoutController extends Controller
     /**
      * Create order + items in a DB transaction, optionally save address, clear cart.
      *
-     * Side effects: decrements product stock when stock >= qty; increments sold_count.
+     * Side effects: locks product rows, decrements stock, increments sold_count.
      * Rate-limited at the route layer (throttle:10,1).
      */
     public function place(Request $request): RedirectResponse
     {
-        $cart = session('cart', []);
+        $sessionCart = session('cart', []);
 
-        if (empty($cart)) {
+        if (empty($sessionCart)) {
             return redirect()->route('cart.index')->with('error', 'Your cart is empty.');
         }
+
+        $paymentKeys = array_keys($this->paymentMethods());
 
         $data = $request->validate([
             'full_name' => 'required|string|max:120',
@@ -99,80 +196,121 @@ class CheckoutController extends Controller
             'line2' => 'nullable|string|max:180',
             'city' => 'required|string|max:80',
             'region' => 'nullable|string|max:80',
-            'payment_method' => 'required|string|max:40',
+            'payment_method' => ['required', 'string', Rule::in($paymentKeys)],
             'shipping_method' => 'required|in:standard,express,pickup',
             'save_address' => 'nullable|boolean',
         ]);
 
-        $couponCode = session('coupon_code');
-        $coupon = $couponCode ? Coupon::where('code', $couponCode)->first() : null;
-        $subtotal = collect($cart)->sum(fn ($item) => $item['price'] * $item['quantity']);
-        $discount = $coupon ? $coupon->discountFor($subtotal) : 0;
+        try {
+            $order = DB::transaction(function () use ($sessionCart, $data) {
+                $lines = [];
+                $subtotal = 0.0;
 
-        $shippingMap = [
-            'standard' => $subtotal >= 150000 ? 0 : 8000,
-            'express' => 18000,
-            'pickup' => 0,
-        ];
-        $shipping = $shippingMap[$data['shipping_method']];
-        $tax = round(($subtotal - $discount) * Marketplace::taxRate(), 2);
-        $total = max(0, $subtotal - $discount + $shipping + $tax);
+                foreach ($sessionCart as $productId => $item) {
+                    /** @var Product|null $product */
+                    $product = Product::query()->whereKey($productId)->lockForUpdate()->first();
 
-        $order = DB::transaction(function () use ($cart, $data, $shipping, $tax, $discount, $couponCode, $total) {
-            if ($data['save_address'] ?? false) {
-                Address::create([
+                    if (! $product) {
+                        throw new \RuntimeException('A product in your cart is no longer available.');
+                    }
+
+                    $quantity = max(1, (int) ($item['quantity'] ?? 1));
+
+                    if ($product->stock < $quantity) {
+                        throw new \RuntimeException(
+                            $product->stock < 1
+                                ? "{$product->name} is out of stock."
+                                : "{$product->name} only has {$product->stock} in stock."
+                        );
+                    }
+
+                    $unitPrice = (float) $product->price;
+                    $lines[] = [
+                        'product' => $product,
+                        'quantity' => $quantity,
+                        'unit_price' => $unitPrice,
+                    ];
+                    $subtotal += $unitPrice * $quantity;
+                }
+
+                if ($lines === []) {
+                    throw new \RuntimeException('Your cart is empty or no longer available.');
+                }
+
+                $couponCode = session('coupon_code');
+                $coupon = $couponCode ? Coupon::where('code', $couponCode)->first() : null;
+                $discount = $coupon ? $coupon->discountFor($subtotal) : 0;
+
+                $shippingMap = [
+                    'standard' => $subtotal >= 150000 ? 0 : 8000,
+                    'express' => 18000,
+                    'pickup' => 0,
+                ];
+                $shipping = $shippingMap[$data['shipping_method']];
+                $tax = round(($subtotal - $discount) * Marketplace::taxRate(), 2);
+                $total = max(0, $subtotal - $discount + $shipping + $tax);
+
+                if ($data['save_address'] ?? false) {
+                    Address::create([
+                        'user_id' => auth()->id(),
+                        'label' => 'Checkout',
+                        'full_name' => $data['full_name'],
+                        'phone' => $data['phone'],
+                        'line1' => $data['line1'],
+                        'line2' => $data['line2'] ?? null,
+                        'city' => $data['city'],
+                        'region' => $data['region'] ?? null,
+                        'country' => 'Tanzania',
+                        'is_default' => ! auth()->user()->addresses()->exists(),
+                    ]);
+                }
+
+                $order = Order::create([
+                    'order_number' => 'SN-'.strtoupper(Str::random(8)),
                     'user_id' => auth()->id(),
-                    'label' => 'Checkout',
-                    'full_name' => $data['full_name'],
-                    'phone' => $data['phone'],
-                    'line1' => $data['line1'],
-                    'line2' => $data['line2'] ?? null,
-                    'city' => $data['city'],
-                    'region' => $data['region'] ?? null,
-                    'country' => 'Tanzania',
-                    'is_default' => ! auth()->user()->addresses()->exists(),
-                ]);
-            }
-
-            $order = Order::create([
-                'order_number' => 'SN-'.strtoupper(Str::random(8)),
-                'user_id' => auth()->id(),
-                'total_price' => $total,
-                'status' => 'pending',
-                'payment_method' => $data['payment_method'],
-                'shipping_method' => $data['shipping_method'],
-                'shipping_cost' => $shipping,
-                'tax_amount' => $tax,
-                'discount_amount' => $discount,
-                'coupon_code' => $couponCode,
-                'shipping_address' => [
-                    'full_name' => $data['full_name'],
-                    'phone' => $data['phone'],
-                    'line1' => $data['line1'],
-                    'line2' => $data['line2'] ?? null,
-                    'city' => $data['city'],
-                    'region' => $data['region'] ?? null,
-                    'country' => 'Tanzania',
-                ],
-            ]);
-
-            foreach ($cart as $productId => $item) {
-                OrderItem::create([
-                    'order_id' => $order->id,
-                    'product_id' => $productId,
-                    'quantity' => $item['quantity'],
-                    'price' => $item['price'],
+                    'total_price' => $total,
+                    'status' => 'pending',
+                    'payment_method' => $data['payment_method'],
+                    'shipping_method' => $data['shipping_method'],
+                    'shipping_cost' => $shipping,
+                    'tax_amount' => $tax,
+                    'discount_amount' => $discount,
+                    'coupon_code' => $coupon?->code,
+                    'shipping_address' => [
+                        'full_name' => $data['full_name'],
+                        'phone' => $data['phone'],
+                        'line1' => $data['line1'],
+                        'line2' => $data['line2'] ?? null,
+                        'city' => $data['city'],
+                        'region' => $data['region'] ?? null,
+                        'country' => 'Tanzania',
+                    ],
                 ]);
 
-                // Conditional decrement avoids going negative if stock raced since cart add.
-                Product::where('id', $productId)->where('stock', '>=', $item['quantity'])->decrement('stock', $item['quantity']);
-                Product::where('id', $productId)->increment('sold_count', $item['quantity']);
-            }
+                foreach ($lines as $line) {
+                    /** @var Product $product */
+                    $product = $line['product'];
 
-            return $order;
-        });
+                    OrderItem::recordPurchase(
+                        $order->id,
+                        $product->id,
+                        $line['quantity'],
+                        $line['unit_price']
+                    );
+
+                    $product->decrement('stock', $line['quantity']);
+                    $product->increment('sold_count', $line['quantity']);
+                }
+
+                return $order;
+            });
+        } catch (\RuntimeException $e) {
+            return redirect()->route('cart.index')->with('error', $e->getMessage());
+        }
 
         session()->forget(['cart', 'coupon_code']);
+
+        OrderPlaced::dispatch($order->load('items.product.vendor.user'));
 
         // Payment handlers are stubbed: real gateways (Stripe / M-Pesa) require configured keys.
         return redirect()->route('checkout.confirmation', $order)->with('success', 'Order placed! Complete payment using your selected method.');
@@ -188,30 +326,5 @@ class CheckoutController extends Controller
         $order->load('items.product');
 
         return view('checkout-confirmation', compact('order'));
-    }
-
-    /**
-     * Available payment method labels shown on the checkout form (stub integrations).
-     *
-     * @return array<string, string>
-     */
-    protected function paymentMethods(): array
-    {
-        return [
-            'card' => 'Visa / Mastercard / Amex',
-            'paypal' => 'PayPal',
-            'apple_pay' => 'Apple Pay',
-            'google_pay' => 'Google Pay',
-            'stripe' => 'Stripe',
-            'mpesa' => 'M-Pesa',
-            'airtel' => 'Airtel Money',
-            'tigo' => 'Tigo Pesa',
-            'halopesa' => 'HaloPesa',
-            'mixx' => 'Mixx by Yas',
-            'mtn' => 'MTN MoMo',
-            'orange' => 'Orange Money',
-            'bank' => 'Bank transfer',
-            'cod' => 'Cash on delivery',
-        ];
     }
 }

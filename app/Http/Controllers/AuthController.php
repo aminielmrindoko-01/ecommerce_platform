@@ -46,8 +46,12 @@ class AuthController extends Controller
             $request->session()->regenerate();
 
             $user = Auth::user();
-            if ($user && $user->role === 'admin') {
+            if ($user && $user->isAdmin()) {
                 return redirect()->route('admin.dashboard');
+            }
+
+            if ($user && $user->isVendor() && $user->vendor) {
+                return redirect()->route('vendor.dashboard');
             }
 
             return redirect()->intended(route('home'));
@@ -72,9 +76,9 @@ class AuthController extends Controller
     public function register(Request $request): RedirectResponse
     {
         $request->validate([
-            'name' => 'required',
-            'email' => 'required|email|unique:users',
-            'password' => 'required|min:6',
+            'name' => 'required|string|max:120',
+            'email' => 'required|email|max:255|unique:users',
+            'password' => 'required|string|min:8|confirmed',
         ]);
 
         User::create([
