@@ -20,12 +20,6 @@ class PesapalWebhookController extends Controller
             'OrderNotificationType' => $request->input('OrderNotificationType', $request->query('OrderNotificationType')),
         ];
 
-        logger()->info('pesapal.callback.received', [
-            'type' => $payload['OrderNotificationType'],
-            'merchant_reference' => $payload['OrderMerchantReference'],
-            'provider_tracking' => $payload['OrderTrackingId'],
-        ]);
-
         $result = $processor->processNotification($payload);
 
         return response()->json([

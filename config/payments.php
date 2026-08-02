@@ -204,15 +204,18 @@ return [
             'live_charging' => env('PAYMENT_PESAPAL_SANDBOX_CHARGING', false),
             'coming_soon' => true,
             'availability' => 'coming_soon',
+            // Phase 8C: only "sandbox" is permitted. Any other value fail-closes.
             'environment' => env('PESAPAL_ENV', 'sandbox'),
             'consumer_key' => env('PESAPAL_CONSUMER_KEY'),
             'consumer_secret' => env('PESAPAL_CONSUMER_SECRET'),
             'callback_url' => env('PESAPAL_CALLBACK_URL'),
             'ipn_url' => env('PESAPAL_IPN_URL'),
+            // Optional pre-registered sandbox IPN id (avoids RegisterIPN when set).
+            'ipn_id' => env('PESAPAL_IPN_ID'),
             'timeout' => (int) env('PESAPAL_TIMEOUT', 15),
             'base_urls' => [
                 'sandbox' => 'https://cybqa.pesapal.com/pesapalv3',
-                // Production URL intentionally unused in Phase 8A/8B.
+                // Production URL intentionally unused in Phase 8A/8B/8C.
             ],
             // Only these hosts may appear in "Continue to PesaPal" links.
             'allowed_redirect_hosts' => [
