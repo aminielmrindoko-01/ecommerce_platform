@@ -4,12 +4,13 @@
  * |--------------------------------------------------------------------------
  * | Product create/update validation
  * |--------------------------------------------------------------------------
- * | Authorization: any authenticated user may submit (route also requires auth).
+ * | Authorization: admins only (routes also use auth + admin middleware).
  * | Image uploads capped at 2MB; vendor_id must exist.
  */
 
 namespace App\Http\Requests;
 
+use App\Models\Product;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
@@ -20,11 +21,25 @@ use Illuminate\Foundation\Http\FormRequest;
 class ProductRequest extends FormRequest
 {
     /**
-     * Allow only signed-in users to mutate products via this request.
+     * Only admins may create or update products.
      */
     public function authorize(): bool
     {
-        return auth()->check();
+        $user = $this->user();
+
+        if (! $user || ! $user->isAdmin()) {
+            return false;
+        }
+
+        $productId = $this->route('id');
+
+        if ($productId !== null) {
+            $product = Product::find($productId);
+
+            return $product !== null && $user->can('update', $product);
+        }
+
+        return $user->can('create', Product::class);
     }
 
     /**
@@ -42,7 +57,7 @@ class ProductRequest extends FormRequest
             'description' => 'nullable|string',
             'vendor_id' => 'required|exists:vendors,id',
             'category_id' => 'nullable|exists:categories,id',
-            'image' => 'nullable|image|max:2048',
+            'image' => 'nullable|image|mimes:jpg,jpeg,png,webp,gif|max:2048',
         ];
     }
 }

@@ -94,11 +94,44 @@ class CartController extends Controller
     }
 
     /**
+     * Refresh session cart lines from live product rows (price + stock).
+     *
+     * @param  array<int|string, array<string, mixed>>  $cart
+     * @return array<int|string, array{name: string, price: float, quantity: int, image: mixed, brand: mixed}>
+     */
+    protected function syncCartWithCatalog(array $cart): array
+    {
+        $synced = [];
+
+        foreach ($cart as $productId => $item) {
+            $product = Product::query()->find($productId);
+
+            if (! $product || $product->stock < 1) {
+                continue;
+            }
+
+            $quantity = max(1, min((int) ($item['quantity'] ?? 1), $product->stock));
+
+            $synced[$product->id] = [
+                'name' => $product->name,
+                'price' => (float) $product->price,
+                'quantity' => $quantity,
+                'image' => $product->image_url,
+                'brand' => $product->brand,
+            ];
+        }
+
+        $this->setCart($synced);
+
+        return $synced;
+    }
+
+    /**
      * Render cart with subtotal, coupon discount, shipping, country tax, and total.
      */
     public function index(): View
     {
-        $cart = $this->getCart();
+        $cart = $this->syncCartWithCatalog($this->getCart());
         $saved = $this->getSaved();
         $couponCode = session('coupon_code');
         $coupon = $couponCode ? Coupon::where('code', $couponCode)->first() : null;

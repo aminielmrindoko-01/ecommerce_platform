@@ -3,14 +3,13 @@
 /**
  * Admin console routes under /admin.
  *
- * Auth is required here; AdminController also applies AdminMiddleware so
- * non-admin authenticated users receive 403 on every action.
+ * Auth + admin middleware required; non-admin authenticated users receive 403.
  */
 
 use App\Http\Controllers\AdminController;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
+Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/', [AdminController::class, 'dashboard'])->name('dashboard');
     Route::get('/products', [AdminController::class, 'products'])->name('products');
     Route::delete('/products/{id}', [AdminController::class, 'destroyProduct'])->name('products.destroy');

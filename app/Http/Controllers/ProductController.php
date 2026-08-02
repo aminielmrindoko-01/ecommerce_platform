@@ -131,10 +131,12 @@ class ProductController extends Controller
     }
 
     /**
-     * Create-product form (auth required at route).
+     * Create-product form (admin only at route + policy).
      */
     public function create(): View
     {
+        $this->authorize('create', Product::class);
+
         $vendors = Vendor::orderBy('store_name')->get();
         $categories = Category::orderBy('name')->get();
 
@@ -146,6 +148,8 @@ class ProductController extends Controller
      */
     public function store(ProductRequest $request): RedirectResponse
     {
+        $this->authorize('create', Product::class);
+
         $data = $request->only(['vendor_id', 'category_id', 'name', 'brand', 'price', 'stock', 'description']);
         $data['slug'] = Str::slug($request->name).'-'.Str::random(5);
 
@@ -167,6 +171,8 @@ class ProductController extends Controller
     public function edit($id): View
     {
         $product = Product::findOrFail($id);
+        $this->authorize('update', $product);
+
         $vendors = Vendor::orderBy('store_name')->get();
         $categories = Category::orderBy('name')->get();
 
@@ -183,6 +189,7 @@ class ProductController extends Controller
     public function update(ProductRequest $request, $id): RedirectResponse
     {
         $product = Product::findOrFail($id);
+        $this->authorize('update', $product);
 
         $product->fill($request->only(['vendor_id', 'category_id', 'name', 'brand', 'description', 'price', 'stock']));
 
@@ -206,6 +213,8 @@ class ProductController extends Controller
     public function destroy($id): RedirectResponse
     {
         $product = Product::findOrFail($id);
+        $this->authorize('delete', $product);
+
         $product->delete();
 
         return redirect()->route('products.index')->with('success', 'Product deleted.');

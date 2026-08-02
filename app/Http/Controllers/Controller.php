@@ -2,15 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+
 /**
  * Base controller for HTTP actions in the SANA Market app.
  *
- * Shared middleware traits are not used here — auth/admin gates are applied
- * per-controller or via route groups.
+ * Auth/admin gates are applied via route groups; policies use AuthorizesRequests.
  *
  * @package App\Http\Controllers
  */
 abstract class Controller
 {
-    //
+    use AuthorizesRequests;
 }

@@ -5,6 +5,7 @@
  * | Admin operations console
  * |--------------------------------------------------------------------------
  * | Dashboard aggregates and admin management screens.
+ * | Routes require auth + admin middleware (see routes/admin.php).
  */
 
 namespace App\Http\Controllers;

@@ -1,59 +1,149 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# SANA Market — E-Commerce Marketplace
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Laravel marketplace for browsing products, managing a session cart, placing orders, and administering catalog/order operations from an admin console.
 
-## About Laravel
+## Overview
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+SANA Market is a multi-vendor style storefront focused on East African shopping preferences (locale, currency display, country tax). Customers can register, browse the catalog, manage a cart, check out, and track their orders. Admins manage products, vendors, users, orders, and inventory views.
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Features
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+* Customer authentication (register, login, logout, password change)
+* Role-based access (`customer`, `vendor`, `admin`) with admin middleware
+* Product marketplace with categories, vendors, reviews, and Q&A
+* Admin-only product create/update/delete
+* Session shopping cart with stock clamping and live price sync
+* Checkout with server-side price/stock validation (payment gateways stubbed)
+* Order history with ownership checks (IDOR protection)
+* Admin dashboard (KPIs, orders, users, vendors, inventory, coupons, reviews)
+* Localization, currency display conversion, and country preference cookies
+* SEO helpers (sitemap, robots, Open Graph, JSON-LD)
+* Secure image uploads (`jpg`, `jpeg`, `png`, `webp`, `gif`)
+* PHPUnit feature tests for auth, authorization, cart, and checkout security
 
-## Learning Laravel
+## Technology Stack
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+* PHP 8.2+
+* Laravel 12
+* MySQL (intended production/local database)
+* Blade templates
+* JavaScript (Vite)
+* CSS
+* PHPUnit
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+## Architecture
 
-## Laravel Sponsors
+| Area | Location |
+|------|----------|
+| HTTP routes | `routes/shop.php`, `routes/admin.php` |
+| Controllers | `app/Http/Controllers/` |
+| Middleware | `admin`, `role`, marketplace preferences |
+| Policies | `app/Policies/ProductPolicy.php` |
+| Models | `app/Models/` |
+| Marketplace helpers | `app/Support/Marketplace.php`, `app/helpers.php` |
+| Views | `resources/views/` |
+| Migrations / seeders | `database/migrations/`, `database/seeders/` |
+| Tests | `tests/Feature/`, `tests/Unit/` |
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+Cart and coupon state live in the session. Order placement recalculates line prices and stock from the database inside a transaction.
 
-### Premium Partners
+## Installation
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+```bash
+git clone <repository-url>
+cd ecommerce_platform
+composer install
+cp .env.example .env
+php artisan key:generate
+```
 
-## Contributing
+### Database (MySQL)
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+Create an empty MySQL database, then set credentials in `.env`:
 
-## Code of Conduct
+```env
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=sana_market
+DB_USERNAME=root
+DB_PASSWORD=
+```
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+Then run:
 
-## Security Vulnerabilities
+```bash
+php artisan migrate
+php artisan db:seed
+npm install
+npm run build
+php artisan storage:link
+php artisan serve
+```
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+Visit `http://127.0.0.1:8000`.
+
+### Demo accounts (local seeding only)
+
+After `php artisan db:seed`:
+
+| Email | Password | Role |
+|-------|----------|------|
+| `admin@example.com` | `password` | admin |
+| `test@example.com` | `password` | customer |
+| `seller@example.com` | `password` | vendor |
+
+Do not use these credentials in production.
+
+## Testing
+
+Tests use SQLite in-memory (`phpunit.xml`) and do not require MySQL.
+
+```bash
+php artisan test
+```
+
+## Security
+
+Implemented protections include:
+
+* Admin routes gated by `auth` + `admin` middleware
+* Product mutations restricted to admins (middleware + policy + form request)
+* Checkout totals calculated from live product rows (session prices ignored)
+* Stock locked with `lockForUpdate()` during order placement
+* Order confirmation / account order views enforce ownership
+* Registration always creates `customer` role
+* CSRF protection on web forms
+* Throttling on login, register, checkout, contact, reviews, and questions
+* Upload MIME allow-lists for product/avatar images
+* XSS hardening in search/recently-viewed JavaScript (DOM APIs / URL checks)
+
+Payment charging is **not** integrated — selected methods are recorded and orders remain `pending` until a real gateway is added.
+
+## Project Structure
+
+```text
+app/Http/Controllers   Storefront, account, checkout, admin
+app/Http/Middleware    Admin, role, marketplace preferences
+app/Models             Eloquent models
+app/Policies           Authorization policies
+database/migrations    Schema (MySQL-oriented)
+database/seeders       Demo users + marketplace catalog
+resources/views        Blade UI
+resources/js           Storefront progressive enhancement
+tests/Feature          Security and functional regression tests
+```
+
+## Future Improvements
+
+1. Real payment gateway integration (M-Pesa / card)
+2. Vendor–user ownership linking and vendor self-service product CRUD
+3. Admin create/update UI for categories, coupons, and inventory adjustments
+4. Email notifications and password reset flow
+5. Persistent cart for authenticated users
+6. Stronger content moderation for reviews/questions
+7. Docker Compose for one-command local MySQL + app setup
 
 ## License
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+This project is open-sourced under the MIT license.

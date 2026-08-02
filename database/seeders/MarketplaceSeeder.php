@@ -242,7 +242,6 @@ class MarketplaceSeeder extends Seeder
                 'price' => $data['price'],
                 'compare_at_price' => $data['compare_at_price'],
                 'stock' => $data['stock'],
-                'sold_count' => $data['sold_count'],
                 'is_featured' => $data['is_featured'],
                 'is_flash_sale' => $data['is_flash_sale'],
                 'flash_ends_at' => $data['is_flash_sale'] ? $flashEnd : null,
@@ -253,9 +252,14 @@ class MarketplaceSeeder extends Seeder
                 'specs' => $data['specs'],
                 'variants' => $data['variants'],
                 'sku' => 'SKU-'.strtoupper(Str::random(8)),
+            ]);
+
+            // Aggregates are guarded from mass assignment; set explicitly for demo data.
+            $product->forceFill([
+                'sold_count' => $data['sold_count'],
                 'rating_avg' => round(mt_rand(40, 50) / 10, 1),
                 'rating_count' => mt_rand(12, 240),
-            ]);
+            ])->save();
 
             Review::create([
                 'product_id' => $product->id,

@@ -72,9 +72,9 @@ class AuthController extends Controller
     public function register(Request $request): RedirectResponse
     {
         $request->validate([
-            'name' => 'required',
-            'email' => 'required|email|unique:users',
-            'password' => 'required|min:6',
+            'name' => 'required|string|max:120',
+            'email' => 'required|email|max:255|unique:users',
+            'password' => 'required|string|min:8|confirmed',
         ]);
 
         User::create([

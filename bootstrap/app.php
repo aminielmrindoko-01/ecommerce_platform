@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Middleware\AdminMiddleware;
+use App\Http\Middleware\RoleMiddleware;
 use App\Http\Middleware\SetMarketplacePreferences;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -15,6 +17,11 @@ return Application::configure(basePath: dirname(__DIR__))
         // Apply locale/currency/country view shares on every web request.
         $middleware->web(append: [
             SetMarketplacePreferences::class,
+        ]);
+
+        $middleware->alias([
+            'admin' => AdminMiddleware::class,
+            'role' => RoleMiddleware::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

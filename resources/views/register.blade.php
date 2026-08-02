@@ -18,8 +18,10 @@
         </div>
         <div class="form-group">
             <label for="password">Password</label>
-            <input class="form-control" id="password" type="password" name="password" required minlength="6">
+            <input class="form-control" id="password" type="password" name="password" required minlength="8" autocomplete="new-password">
             @error('password')<div class="form-error">{{ $message }}</div>@enderror
+            <label for="password_confirmation" style="margin-top:.75rem;">Confirm password</label>
+            <input class="form-control" id="password_confirmation" type="password" name="password_confirmation" required minlength="8" autocomplete="new-password">
         </div>
         <button class="btn btn-accent" type="submit" style="width:100%;">Create account</button>
     </form>
