@@ -48,6 +48,20 @@ Order payment/admin lifecycle and vendor fulfillment are intentionally separate:
 * Vendor dashboards show fulfillment KPI counts for their own items only.
 * Cross-vendor IDOR attempts return `403`; price, quantity, product, and order ownership fields are not mass-assignable from fulfillment requests.
 
+## Marketplace Operations
+
+Operational workflows built on top of per-item fulfillment:
+
+* **Database notifications** — customers receive fulfillment updates; vendors receive new-order and cancellation alerts (`notifications` table, account inbox at `/account/notifications`)
+* **Fulfillment audit history** — every successful status change writes `fulfillment_status_histories` (actor, role, from/to, optional reason)
+* **Concurrency-safe transitions** — `OrderItemFulfillmentService` uses transactions + `lockForUpdate()` before applying changes
+* **Admin overrides** — admins may use an explicit broader transition map via `PATCH /admin/orders/{order}/items/{orderItem}/fulfillment` (reason required for reopen and late cancellations)
+* **Dynamic fulfillment summary** — `OrderFulfillmentSummary` computes display-only aggregate state from line items (not stored; separate from `orders.status`)
+* **Customer tracking** — order detail shows vendor grouping, progress steps, and the computed fulfillment summary
+* **Vendor Needs Action** — dashboard queue for pending/confirmed/processing items; order list supports `?fulfillment=` filtering
+
+Email/SMS delivery, payment gateways, payouts, and shipping-provider APIs remain out of scope.
+
 ## Technology Stack
 
 * PHP 8.2+
@@ -66,7 +80,9 @@ Order payment/admin lifecycle and vendor fulfillment are intentionally separate:
 | Controllers | `app/Http/Controllers/`, `app/Http/Controllers/Vendor/` |
 | Middleware | `admin`, `vendor`, `role`, marketplace preferences |
 | Policies | `ProductPolicy`, `VendorPolicy`, `OrderItemPolicy` |
-| Services | `OrderItemFulfillmentService` |
+| Services | `OrderItemFulfillmentService`, `OrderFulfillmentSummary` |
+| Notifications | Database channel (`app/Notifications/`) |
+| Events / Listeners | `OrderItemStatusChanged`, `OrderPlaced` + listeners |
 | Models | `app/Models/` |
 | Marketplace helpers | `app/Support/Marketplace.php`, `app/helpers.php` |
 | Views | `resources/views/` (including `vendor/`) |
@@ -144,6 +160,8 @@ Implemented protections include:
 * Stock locked with `lockForUpdate()` during order placement
 * Order confirmation / account / vendor order views enforce ownership isolation
 * Vendor fulfillment updates authorized by `OrderItemPolicy` + state machine (cross-vendor IDOR blocked)
+* Admin fulfillment overrides require admin middleware + policy + explicit transition/reason rules
+* Notification mark-as-read scoped to authenticated notifiable ownership
 * Registration always creates `customer` role
 * CSRF protection on web forms
 * Throttling on login, register, checkout, contact, reviews, and questions

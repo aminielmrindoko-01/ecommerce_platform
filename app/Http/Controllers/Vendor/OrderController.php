@@ -8,6 +8,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Services\OrderItemFulfillmentService;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\View\View;
 use InvalidArgumentException;
 
@@ -22,24 +23,38 @@ class OrderController extends Controller
 
     /**
      * Orders that include at least one product from this vendor.
+     * Optional ?fulfillment= filter scopes to items in that status.
      */
-    public function index(): View
+    public function index(Request $request): View
     {
         $vendorId = auth()->user()->vendor->id;
+        $fulfillmentFilter = $request->query('fulfillment');
+        $allowedFilters = OrderItem::FULFILLMENT_STATUSES;
+        if ($fulfillmentFilter && ! in_array($fulfillmentFilter, $allowedFilters, true)) {
+            $fulfillmentFilter = null;
+        }
 
-        $orderIds = OrderItem::query()
-            ->whereHas('product', fn ($q) => $q->where('vendor_id', $vendorId))
-            ->distinct()
-            ->pluck('order_id');
+        $itemQuery = OrderItem::query()
+            ->whereHas('product', fn ($q) => $q->where('vendor_id', $vendorId));
+
+        if ($fulfillmentFilter) {
+            $itemQuery->where('fulfillment_status', $fulfillmentFilter);
+        }
+
+        $orderIds = $itemQuery->distinct()->pluck('order_id');
 
         $orders = Order::query()
             ->whereIn('id', $orderIds)
-            ->with(['items' => function ($q) use ($vendorId) {
-                $q->whereHas('product', fn ($pq) => $pq->where('vendor_id', $vendorId))
-                    ->with('product');
+            ->with(['items' => function ($q) use ($vendorId, $fulfillmentFilter) {
+                $q->whereHas('product', fn ($pq) => $pq->where('vendor_id', $vendorId));
+                if ($fulfillmentFilter) {
+                    $q->where('fulfillment_status', $fulfillmentFilter);
+                }
+                $q->with('product');
             }, 'user'])
             ->latest()
-            ->paginate(15);
+            ->paginate(15)
+            ->appends($request->query());
 
         $orders->getCollection()->transform(function (Order $order) {
             $order->setAttribute(
@@ -53,7 +68,7 @@ class OrderController extends Controller
             return $order;
         });
 
-        return view('vendor.orders.index', compact('orders'));
+        return view('vendor.orders.index', compact('orders', 'fulfillmentFilter', 'allowedFilters'));
     }
 
     /**
@@ -109,7 +124,9 @@ class OrderController extends Controller
         try {
             $this->fulfillment->transition(
                 $orderItem,
-                $request->validated('fulfillment_status')
+                $request->validated('fulfillment_status'),
+                $request->user(),
+                'vendor'
             );
         } catch (InvalidArgumentException $e) {
             return back()->with('error', $e->getMessage());

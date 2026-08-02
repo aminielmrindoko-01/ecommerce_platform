@@ -10,6 +10,8 @@ use Illuminate\Support\ServiceProvider;
  * Marketplace preference sharing is handled by SetMarketplacePreferences middleware
  * rather than View composers here.
  *
+ * Event listeners under app/Listeners are auto-discovered by Laravel.
+ *
  * @package App\Providers
  */
 class AppServiceProvider extends ServiceProvider

@@ -44,6 +44,16 @@ class DashboardController extends Controller
         $deliveredFulfillment = (int) ($fulfillmentCounts['delivered'] ?? 0);
         $cancelledFulfillment = (int) ($fulfillmentCounts['cancelled'] ?? 0);
 
+        $needsActionCount = $pendingFulfillment + $confirmedFulfillment + $processingFulfillment;
+
+        $needsActionItems = OrderItem::query()
+            ->whereHas('product', fn ($q) => $q->where('vendor_id', $vendorId))
+            ->whereIn('fulfillment_status', ['pending', 'confirmed', 'processing'])
+            ->with(['product', 'order'])
+            ->latest()
+            ->limit(8)
+            ->get();
+
         $totalSales = (string) OrderItem::query()
             ->whereHas('product', fn ($q) => $q->where('vendor_id', $vendorId))
             ->selectRaw('COALESCE(SUM(price * quantity), 0) as vendor_sales')
@@ -76,6 +86,8 @@ class DashboardController extends Controller
             'shippedFulfillment',
             'deliveredFulfillment',
             'cancelledFulfillment',
+            'needsActionCount',
+            'needsActionItems',
             'totalSales',
             'recentProducts',
             'recentOrders'

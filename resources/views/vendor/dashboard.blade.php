@@ -17,6 +17,7 @@
     <div class="admin-stat"><span>Low stock</span><strong>{{ $lowStock }}</strong></div>
     <div class="admin-stat"><span>Orders</span><strong>{{ $totalOrders }}</strong></div>
     <div class="admin-stat"><span>Your sales</span><strong>TSh {{ number_format((float) $totalSales, 0) }}</strong></div>
+    <div class="admin-stat"><span>Needs action</span><strong>{{ $needsActionCount }}</strong></div>
 </div>
 
 <div class="section-head" style="margin-top:1.5rem;">
@@ -27,12 +28,35 @@
 </div>
 
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1rem;" class="section">
-    <div class="admin-stat"><span>Pending</span><strong>{{ $pendingFulfillment }}</strong></div>
-    <div class="admin-stat"><span>Confirmed</span><strong>{{ $confirmedFulfillment }}</strong></div>
-    <div class="admin-stat"><span>Processing</span><strong>{{ $processingFulfillment }}</strong></div>
-    <div class="admin-stat"><span>Shipped</span><strong>{{ $shippedFulfillment }}</strong></div>
-    <div class="admin-stat"><span>Delivered</span><strong>{{ $deliveredFulfillment }}</strong></div>
-    <div class="admin-stat"><span>Cancelled</span><strong>{{ $cancelledFulfillment }}</strong></div>
+    <a class="admin-stat" href="{{ route('vendor.orders.index', ['fulfillment' => 'pending']) }}" style="text-decoration:none;color:inherit;"><span>Pending</span><strong>{{ $pendingFulfillment }}</strong></a>
+    <a class="admin-stat" href="{{ route('vendor.orders.index', ['fulfillment' => 'confirmed']) }}" style="text-decoration:none;color:inherit;"><span>Confirmed</span><strong>{{ $confirmedFulfillment }}</strong></a>
+    <a class="admin-stat" href="{{ route('vendor.orders.index', ['fulfillment' => 'processing']) }}" style="text-decoration:none;color:inherit;"><span>Processing</span><strong>{{ $processingFulfillment }}</strong></a>
+    <a class="admin-stat" href="{{ route('vendor.orders.index', ['fulfillment' => 'shipped']) }}" style="text-decoration:none;color:inherit;"><span>Shipped</span><strong>{{ $shippedFulfillment }}</strong></a>
+    <a class="admin-stat" href="{{ route('vendor.orders.index', ['fulfillment' => 'delivered']) }}" style="text-decoration:none;color:inherit;"><span>Delivered</span><strong>{{ $deliveredFulfillment }}</strong></a>
+    <a class="admin-stat" href="{{ route('vendor.orders.index', ['fulfillment' => 'cancelled']) }}" style="text-decoration:none;color:inherit;"><span>Cancelled</span><strong>{{ $cancelledFulfillment }}</strong></a>
+</div>
+
+<div class="panel section">
+    <div class="section-head" style="margin:0 0 1rem;">
+        <div>
+            <h2 class="font-display" style="margin:0;font-size:1.15rem;">Needs Action</h2>
+            <p style="margin:.25rem 0 0;">Pending, confirmed, and processing items that need your attention</p>
+        </div>
+        <a class="btn btn-ghost" href="{{ route('vendor.orders.index', ['fulfillment' => 'pending']) }}">View queue</a>
+    </div>
+    @forelse($needsActionItems as $item)
+        <div style="display:flex;justify-content:space-between;gap:1rem;padding:.7rem 0;border-bottom:1px solid var(--color-border);">
+            <div>
+                <strong>{{ $item->product->name ?? 'Product' }}</strong>
+                <div style="color:var(--color-ink-muted);font-size:.9rem;">
+                    {{ $item->order->order_number ?? 'Order #'.$item->order_id }} · {{ ucfirst($item->fulfillment_status) }}
+                </div>
+            </div>
+            <a class="btn btn-primary" style="padding:.4rem .7rem;" href="{{ route('vendor.orders.show', $item->order_id) }}">Manage</a>
+        </div>
+    @empty
+        <p style="color:var(--color-ink-muted);margin:0;">No items need action right now.</p>
+    @endforelse
 </div>
 
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;" class="section">

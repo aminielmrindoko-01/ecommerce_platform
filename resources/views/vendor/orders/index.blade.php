@@ -10,6 +10,14 @@
     </div>
 </div>
 
+<div class="panel section" style="display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;">
+    <span style="color:var(--color-ink-muted);margin-right:.35rem;">Filter fulfillment:</span>
+    <a class="btn {{ empty($fulfillmentFilter) ? 'btn-primary' : 'btn-ghost' }}" style="padding:.35rem .7rem;" href="{{ route('vendor.orders.index') }}">All</a>
+    @foreach($allowedFilters as $status)
+        <a class="btn {{ ($fulfillmentFilter ?? null) === $status ? 'btn-primary' : 'btn-ghost' }}" style="padding:.35rem .7rem;" href="{{ route('vendor.orders.index', ['fulfillment' => $status]) }}">{{ ucfirst($status) }}</a>
+    @endforeach
+</div>
+
 <div class="panel section">
     <table class="table" style="width:100%;border-collapse:collapse;">
         <thead>

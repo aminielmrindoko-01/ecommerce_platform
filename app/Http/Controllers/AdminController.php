@@ -10,17 +10,22 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\Admin\UpdateOrderItemFulfillmentRequest;
 use App\Models\Category;
 use App\Models\Coupon;
 use App\Models\Order;
+use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\Review;
 use App\Models\User;
 use App\Models\Vendor;
+use App\Services\OrderFulfillmentSummary;
+use App\Services\OrderItemFulfillmentService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
+use InvalidArgumentException;
 
 class AdminController extends Controller
 {
@@ -155,7 +160,7 @@ class AdminController extends Controller
         return back()->with('success', 'User role updated successfully.');
     }
 
-    public function orders(): View
+    public function orders(OrderFulfillmentSummary $summary, OrderItemFulfillmentService $fulfillment): View
     {
         $orders = Order::with([
             'user',
@@ -163,6 +168,19 @@ class AdminController extends Controller
         ])
             ->latest()
             ->paginate(20);
+
+        $orders->getCollection()->transform(function (Order $order) use ($summary, $fulfillment) {
+            $order->setAttribute('fulfillment_summary', $summary->summarize($order));
+            $order->setAttribute('fulfillment_summary_label', $summary->label($order->fulfillment_summary));
+
+            $allowedByItem = [];
+            foreach ($order->items as $item) {
+                $allowedByItem[$item->id] = $fulfillment->allowedTransitions($item, 'admin');
+            }
+            $order->setAttribute('admin_allowed_by_item', $allowedByItem);
+
+            return $order;
+        });
 
         return view('admin.orders', compact('orders'));
     }
@@ -179,6 +197,34 @@ class AdminController extends Controller
         $order->save();
 
         return back()->with('success', 'Order status updated successfully.');
+    }
+
+    /**
+     * Admin override for a single item's fulfillment status.
+     */
+    public function updateItemFulfillment(
+        UpdateOrderItemFulfillmentRequest $request,
+        Order $order,
+        OrderItem $orderItem,
+        OrderItemFulfillmentService $fulfillment
+    ): RedirectResponse {
+        abort_unless((int) $orderItem->order_id === (int) $order->id, 404);
+
+        $this->authorize('updateFulfillment', $orderItem);
+
+        try {
+            $fulfillment->transition(
+                $orderItem,
+                $request->validated('fulfillment_status'),
+                $request->user(),
+                'admin',
+                $request->validated('reason')
+            );
+        } catch (InvalidArgumentException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return back()->with('success', 'Item fulfillment updated.');
     }
 
     public function categories(): View

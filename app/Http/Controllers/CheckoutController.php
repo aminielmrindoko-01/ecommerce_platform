@@ -11,6 +11,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\OrderPlaced;
 use App\Models\Address;
 use App\Models\Coupon;
 use App\Models\Order;
@@ -308,6 +309,8 @@ class CheckoutController extends Controller
         }
 
         session()->forget(['cart', 'coupon_code']);
+
+        OrderPlaced::dispatch($order->load('items.product.vendor.user'));
 
         // Payment handlers are stubbed: real gateways (Stripe / M-Pesa) require configured keys.
         return redirect()->route('checkout.confirmation', $order)->with('success', 'Order placed! Complete payment using your selected method.');

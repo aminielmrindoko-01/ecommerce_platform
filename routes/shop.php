@@ -81,6 +81,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/account/security', [AccountController::class, 'security'])->name('account.security');
     Route::put('/account/password', [AccountController::class, 'updatePassword'])->name('account.password.update');
     Route::get('/account/notifications', [AccountController::class, 'notifications'])->name('account.notifications');
+    Route::post('/account/notifications/{notification}/read', [AccountController::class, 'markNotificationRead'])
+        ->name('account.notifications.read');
+    Route::post('/account/notifications/read-all', [AccountController::class, 'markAllNotificationsRead'])
+        ->name('account.notifications.readAll');
     Route::get('/account/wishlist', [AccountController::class, 'wishlist'])->name('account.wishlist');
 
     Route::get('/wishlist', [WishlistController::class, 'index'])->name('wishlist.index');
