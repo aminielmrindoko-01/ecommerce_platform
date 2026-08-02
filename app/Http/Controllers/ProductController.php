@@ -150,7 +150,7 @@ class ProductController extends Controller
     {
         $this->authorize('create', Product::class);
 
-        $data = $request->only(['vendor_id', 'category_id', 'name', 'brand', 'price', 'stock', 'description']);
+        $data = $request->only(['category_id', 'name', 'brand', 'price', 'stock', 'description']);
         $data['slug'] = Str::slug($request->name).'-'.Str::random(5);
 
         if ($request->hasFile('image')) {
@@ -158,7 +158,10 @@ class ProductController extends Controller
             $data['image'] = $path;
         }
 
-        Product::create($data);
+        // vendor_id is not mass-assignable; admin selects the owning store explicitly.
+        $product = new Product($data);
+        $product->vendor_id = (int) $request->validated('vendor_id');
+        $product->save();
 
         return redirect()->route('products.index')->with('success', 'Product created successfully');
     }
@@ -191,7 +194,9 @@ class ProductController extends Controller
         $product = Product::findOrFail($id);
         $this->authorize('update', $product);
 
-        $product->fill($request->only(['vendor_id', 'category_id', 'name', 'brand', 'description', 'price', 'stock']));
+        $product->fill($request->only(['category_id', 'name', 'brand', 'description', 'price', 'stock']));
+        // Admin may reassign store ownership; never taken from untrusted vendor forms.
+        $product->vendor_id = (int) $request->validated('vendor_id');
 
         if ($request->hasFile('image')) {
             if ($product->image && ! str_starts_with($product->image, 'http')) {

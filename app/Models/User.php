@@ -35,6 +35,16 @@ class User extends Authenticatable
     ];
 
     /**
+     * Vendor store owned by this user (at most one).
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\HasOne<\App\Models\Vendor, $this>
+     */
+    public function vendor()
+    {
+        return $this->hasOne(Vendor::class);
+    }
+
+    /**
      * @return \Illuminate\Database\Eloquent\Relations\HasMany<\App\Models\Order, $this>
      */
     public function orders()
@@ -72,6 +82,14 @@ class User extends Authenticatable
     public function isVendor(): bool
     {
         return $this->role === 'vendor';
+    }
+
+    /**
+     * Whether this vendor user has an linked store record for ownership checks.
+     */
+    public function hasVendorStore(): bool
+    {
+        return $this->isVendor() && $this->vendor()->exists();
     }
 
     /**

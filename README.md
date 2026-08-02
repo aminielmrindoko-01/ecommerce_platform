@@ -1,17 +1,18 @@
 # SANA Market — E-Commerce Marketplace
 
-Laravel marketplace for browsing products, managing a session cart, placing orders, and administering catalog/order operations from an admin console.
+Laravel marketplace for browsing products, managing a session cart, placing orders, and administering catalog/order operations from an admin console. Vendors manage their own stores and products through a dedicated seller hub.
 
 ## Overview
 
-SANA Market is a multi-vendor style storefront focused on East African shopping preferences (locale, currency display, country tax). Customers can register, browse the catalog, manage a cart, check out, and track their orders. Admins manage products, vendors, users, orders, and inventory views.
+SANA Market is a multi-vendor storefront focused on East African shopping preferences (locale, currency display, country tax). Customers can register, browse the catalog, manage a cart, check out, and track their orders. Vendors manage their own products and view orders containing their items. Admins retain global marketplace control.
 
 ## Features
 
 * Customer authentication (register, login, logout, password change)
-* Role-based access (`customer`, `vendor`, `admin`) with admin middleware
-* Product marketplace with categories, vendors, reviews, and Q&A
-* Admin-only product create/update/delete
+* Role-based access (`customer`, `vendor`, `admin`) with `admin` and `vendor` middleware
+* Multi-vendor marketplace with ownership via `vendors.user_id` → `products.vendor_id`
+* Vendor dashboard, product CRUD, order isolation, and store profile
+* Admin global product create/update/delete and vendor verification
 * Session shopping cart with stock clamping and live price sync
 * Checkout with server-side price/stock validation (payment gateways stubbed)
 * Order history with ownership checks (IDOR protection)
@@ -19,7 +20,16 @@ SANA Market is a multi-vendor style storefront focused on East African shopping 
 * Localization, currency display conversion, and country preference cookies
 * SEO helpers (sitemap, robots, Open Graph, JSON-LD)
 * Secure image uploads (`jpg`, `jpeg`, `png`, `webp`, `gif`)
-* PHPUnit feature tests for auth, authorization, cart, and checkout security
+* PHPUnit feature tests for auth, authorization, cart, checkout, and vendor IDOR
+
+## Vendor Marketplace
+
+* Each vendor store is linked to exactly one user (`vendors.user_id`, unique FK)
+* Vendors access `/vendor` (dashboard, products, orders, profile)
+* Product create/update/delete is ownership-scoped: `products.vendor_id` must match the authenticated vendor
+* `vendor_id` is never accepted from vendor forms — the server assigns ownership
+* Vendor order views show only that vendor’s line items and a vendor subtotal (not the full multi-vendor order total)
+* Customers cannot access vendor routes; admins use `/admin` instead of the seller hub
 
 ## Technology Stack
 
@@ -35,13 +45,13 @@ SANA Market is a multi-vendor style storefront focused on East African shopping 
 
 | Area | Location |
 |------|----------|
-| HTTP routes | `routes/shop.php`, `routes/admin.php` |
-| Controllers | `app/Http/Controllers/` |
-| Middleware | `admin`, `role`, marketplace preferences |
-| Policies | `app/Policies/ProductPolicy.php` |
+| HTTP routes | `routes/shop.php`, `routes/admin.php`, `routes/vendor.php` |
+| Controllers | `app/Http/Controllers/`, `app/Http/Controllers/Vendor/` |
+| Middleware | `admin`, `vendor`, `role`, marketplace preferences |
+| Policies | `ProductPolicy`, `VendorPolicy` |
 | Models | `app/Models/` |
 | Marketplace helpers | `app/Support/Marketplace.php`, `app/helpers.php` |
-| Views | `resources/views/` |
+| Views | `resources/views/` (including `vendor/`) |
 | Migrations / seeders | `database/migrations/`, `database/seeders/` |
 | Tests | `tests/Feature/`, `tests/Unit/` |
 
@@ -87,11 +97,12 @@ Visit `http://127.0.0.1:8000`.
 
 After `php artisan db:seed`:
 
-| Email | Password | Role |
-|-------|----------|------|
-| `admin@example.com` | `password` | admin |
-| `test@example.com` | `password` | customer |
-| `seller@example.com` | `password` | vendor |
+| Email | Password | Role | Notes |
+|-------|----------|------|-------|
+| `admin@example.com` | `password` | admin | Full `/admin` console |
+| `test@example.com` | `password` | customer | Storefront buyer |
+| `seller@example.com` | `password` | vendor | Linked to Tech Haven store |
+| `fashion@example.com` | `password` | vendor | Linked to Fashion Plus store |
 
 Do not use these credentials in production.
 
@@ -108,10 +119,12 @@ php artisan test
 Implemented protections include:
 
 * Admin routes gated by `auth` + `admin` middleware
-* Product mutations restricted to admins (middleware + policy + form request)
+* Vendor routes gated by `auth` + `vendor` middleware (requires linked store)
+* Product mutations authorized by policy (admin global, vendor ownership)
+* Vendor forms cannot set or change `vendor_id`
 * Checkout totals calculated from live product rows (session prices ignored)
 * Stock locked with `lockForUpdate()` during order placement
-* Order confirmation / account order views enforce ownership
+* Order confirmation / account / vendor order views enforce ownership isolation
 * Registration always creates `customer` role
 * CSRF protection on web forms
 * Throttling on login, register, checkout, contact, reviews, and questions
@@ -123,25 +136,25 @@ Payment charging is **not** integrated — selected methods are recorded and ord
 ## Project Structure
 
 ```text
-app/Http/Controllers   Storefront, account, checkout, admin
-app/Http/Middleware    Admin, role, marketplace preferences
-app/Models             Eloquent models
-app/Policies           Authorization policies
-database/migrations    Schema (MySQL-oriented)
-database/seeders       Demo users + marketplace catalog
-resources/views        Blade UI
-resources/js           Storefront progressive enhancement
-tests/Feature          Security and functional regression tests
+app/Http/Controllers         Storefront, account, checkout, admin
+app/Http/Controllers/Vendor  Vendor dashboard, products, orders, profile
+app/Http/Middleware          Admin, vendor, role, marketplace preferences
+app/Models                   Eloquent models (User ↔ Vendor ↔ Product)
+app/Policies                 ProductPolicy, VendorPolicy
+database/migrations          Schema (MySQL-oriented)
+database/seeders             Demo users + marketplace catalog
+resources/views/vendor       Seller hub UI
+tests/Feature                Security and functional regression tests
 ```
 
 ## Future Improvements
 
 1. Real payment gateway integration (M-Pesa / card)
-2. Vendor–user ownership linking and vendor self-service product CRUD
-3. Admin create/update UI for categories, coupons, and inventory adjustments
-4. Email notifications and password reset flow
-5. Persistent cart for authenticated users
-6. Stronger content moderation for reviews/questions
+2. Admin create/update UI for categories, coupons, and inventory adjustments
+3. Email notifications and password reset flow
+4. Persistent cart for authenticated users
+5. Stronger content moderation for reviews/questions
+6. Vendor payout / commission reporting
 7. Docker Compose for one-command local MySQL + app setup
 
 ## License

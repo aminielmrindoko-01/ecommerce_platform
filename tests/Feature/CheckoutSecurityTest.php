@@ -3,45 +3,28 @@
 namespace Tests\Feature;
 
 use App\Models\Order;
-use App\Models\Product;
 use App\Models\User;
-use App\Models\Vendor;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Support\CreatesMarketplace;
 use Tests\TestCase;
 
 class CheckoutSecurityTest extends TestCase
 {
+    use CreatesMarketplace;
     use RefreshDatabase;
-
-    private function createProduct(array $overrides = []): Product
-    {
-        $vendor = Vendor::create([
-            'store_name' => 'Checkout Vendor',
-            'email' => 'checkout-vendor@example.com',
-            'is_verified' => true,
-        ]);
-
-        return Product::create(array_merge([
-            'vendor_id' => $vendor->id,
-            'name' => 'Checkout Item',
-            'slug' => 'checkout-item-'.uniqid(),
-            'price' => 50000,
-            'stock' => 10,
-            'description' => 'Checkout test product',
-        ], $overrides));
-    }
 
     public function test_checkout_uses_database_price_not_session_price(): void
     {
         $user = User::factory()->create();
-        $product = $this->createProduct(['price' => 50000, 'stock' => 5]);
+        [, $vendor] = $this->createVendorUser();
+        $product = $this->createProductForVendor($vendor, ['price' => 50000, 'stock' => 5, 'name' => 'Checkout Item']);
 
         $response = $this->actingAs($user)
             ->withSession([
                 'cart' => [
                     $product->id => [
                         'name' => $product->name,
-                        'price' => 1, // tampered session price
+                        'price' => 1,
                         'quantity' => 2,
                         'image' => null,
                         'brand' => null,
@@ -61,7 +44,6 @@ class CheckoutSecurityTest extends TestCase
         $this->assertNotNull($order);
         $response->assertRedirect(route('checkout.confirmation', $order));
 
-        // 2 * 50000 + tax (18% of 100000) = 118000 with pickup shipping 0
         $this->assertEquals(118000.0, (float) $order->total_price);
         $this->assertEquals(50000.0, (float) $order->items()->first()->price);
         $this->assertEquals(3, $product->fresh()->stock);
@@ -70,7 +52,8 @@ class CheckoutSecurityTest extends TestCase
     public function test_checkout_rejects_insufficient_stock(): void
     {
         $user = User::factory()->create();
-        $product = $this->createProduct(['price' => 20000, 'stock' => 1]);
+        [, $vendor] = $this->createVendorUser();
+        $product = $this->createProductForVendor($vendor, ['price' => 20000, 'stock' => 1]);
 
         $response = $this->actingAs($user)
             ->withSession([
@@ -101,7 +84,8 @@ class CheckoutSecurityTest extends TestCase
     public function test_checkout_rejects_unknown_payment_method(): void
     {
         $user = User::factory()->create();
-        $product = $this->createProduct();
+        [, $vendor] = $this->createVendorUser();
+        $product = $this->createProductForVendor($vendor);
 
         $this->actingAs($user)
             ->withSession([
@@ -133,7 +117,8 @@ class CheckoutSecurityTest extends TestCase
     {
         $owner = User::factory()->create();
         $intruder = User::factory()->create();
-        $product = $this->createProduct();
+        [, $vendor] = $this->createVendorUser();
+        $product = $this->createProductForVendor($vendor);
 
         $order = Order::create([
             'order_number' => 'SN-TESTORDER',

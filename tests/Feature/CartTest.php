@@ -2,36 +2,23 @@
 
 namespace Tests\Feature;
 
-use App\Models\Product;
-use App\Models\Vendor;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Support\CreatesMarketplace;
 use Tests\TestCase;
 
 class CartTest extends TestCase
 {
+    use CreatesMarketplace;
     use RefreshDatabase;
-
-    private function createProduct(array $overrides = []): Product
-    {
-        $vendor = Vendor::create([
-            'store_name' => 'Cart Vendor',
-            'email' => 'cart-vendor@example.com',
-            'is_verified' => true,
-        ]);
-
-        return Product::create(array_merge([
-            'vendor_id' => $vendor->id,
-            'name' => 'Cart Item',
-            'slug' => 'cart-item-'.uniqid(),
-            'price' => 15000,
-            'stock' => 3,
-            'description' => 'Cart test product',
-        ], $overrides));
-    }
 
     public function test_guest_can_add_product_to_cart_using_database_price(): void
     {
-        $product = $this->createProduct(['price' => 15000, 'stock' => 3]);
+        [, $vendor] = $this->createVendorUser();
+        $product = $this->createProductForVendor($vendor, [
+            'name' => 'Cart Item',
+            'price' => 15000,
+            'stock' => 3,
+        ]);
 
         $this->post(route('cart.add', $product->id), ['quantity' => 2])
             ->assertRedirect(route('cart.index'));
@@ -47,7 +34,8 @@ class CartTest extends TestCase
 
     public function test_cart_quantity_is_clamped_to_stock(): void
     {
-        $product = $this->createProduct(['stock' => 2]);
+        [, $vendor] = $this->createVendorUser();
+        $product = $this->createProductForVendor($vendor, ['stock' => 2]);
 
         $this->post(route('cart.add', $product->id), ['quantity' => 10])
             ->assertRedirect(route('cart.index'));
@@ -57,7 +45,8 @@ class CartTest extends TestCase
 
     public function test_cart_index_refreshes_tampered_session_price(): void
     {
-        $product = $this->createProduct(['price' => 20000]);
+        [, $vendor] = $this->createVendorUser();
+        $product = $this->createProductForVendor($vendor, ['price' => 20000]);
 
         $this->withSession([
             'cart' => [
@@ -76,7 +65,8 @@ class CartTest extends TestCase
 
     public function test_out_of_stock_product_cannot_be_added(): void
     {
-        $product = $this->createProduct(['stock' => 0]);
+        [, $vendor] = $this->createVendorUser();
+        $product = $this->createProductForVendor($vendor, ['stock' => 0]);
 
         $this->from(route('products.show', $product->id))
             ->post(route('cart.add', $product->id))

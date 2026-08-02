@@ -112,6 +112,9 @@
                     @if(auth()->user()->isAdmin())
                         <a class="nav-link" href="{{ route('admin.dashboard') }}">{{ mt('nav.admin') }}</a>
                     @endif
+                    @if(auth()->user()->isVendor() && auth()->user()->vendor)
+                        <a class="nav-link {{ request()->routeIs('vendor.*') ? 'is-active' : '' }}" href="{{ route('vendor.dashboard') }}">Seller hub</a>
+                    @endif
                     <form method="POST" action="{{ route('logout') }}" style="display:inline;">
                         @csrf
                         <button type="submit" class="nav-link" style="background:transparent;border:0;cursor:pointer;font:inherit;">{{ mt('nav.logout') }}</button>
