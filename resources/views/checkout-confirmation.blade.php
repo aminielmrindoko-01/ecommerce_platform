@@ -6,9 +6,10 @@
 <div class="panel" style="text-align:center;padding:2.5rem 1.5rem;max-width:720px;margin:0 auto;">
     <div class="badge badge-stock" style="margin-bottom:1rem;">Order placed</div>
     <h1 class="font-display" style="margin:0 0 .5rem;">Thank you!</h1>
-    <p style="color:var(--color-ink-muted);margin:0 0 1.25rem;">Order <strong>{{ $order->order_number ?? '#'.$order->id }}</strong> is confirmed. Complete payment via <strong>{{ strtoupper(str_replace('_', ' ', $order->payment_method ?? 'selected method')) }}</strong>.</p>
+    <p style="color:var(--color-ink-muted);margin:0 0 1.25rem;">Order <strong>{{ $order->order_number ?? '#'.$order->id }}</strong> is confirmed. Complete payment via <strong>{{ strtoupper(str_replace('_', ' ', $order->payment_method ?? 'selected method')) }}</strong>. Gateways are not charged automatically.</p>
     <div style="display:grid;gap:.45rem;text-align:left;max-width:420px;margin:0 auto 1.5rem;font-size:.95rem;">
-        <div style="display:flex;justify-content:space-between;"><span>Status</span><strong>{{ ucfirst($order->status) }}</strong></div>
+        <div style="display:flex;justify-content:space-between;"><span>Order status</span><strong>{{ ucfirst($order->status) }}</strong></div>
+        <div style="display:flex;justify-content:space-between;"><span>Payment status</span><strong>{{ ucfirst($order->payment_status ?? 'pending') }}</strong></div>
         <div style="display:flex;justify-content:space-between;"><span>Total</span><strong>{{ money($order->total_price) }}</strong></div>
         <div style="display:flex;justify-content:space-between;"><span>Shipping</span><strong>{{ ucfirst($order->shipping_method ?? 'standard') }}</strong></div>
     </div>

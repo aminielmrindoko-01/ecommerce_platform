@@ -62,6 +62,21 @@ Operational workflows built on top of per-item fulfillment:
 
 Email/SMS delivery, payment gateways, payouts, and shipping-provider APIs remain out of scope.
 
+## Payment Operations Foundation
+
+Payment charging is **not** live. Phase 5 adds a secure operations layer for recording and administering payment state:
+
+* `orders.payment_status` — dedicated payment lifecycle (`pending`, `processing`, `paid`, `failed`, `cancelled`, `refunded`, `partially_refunded`)
+* `orders.status` — unchanged legacy admin/order lifecycle (`pending`, `paid`, `shipped`, `completed`)
+* `payment_transactions` — order-level records (`manual` / `stub` providers only) with unique `reference` and unique `provider_reference`
+* `PaymentService` — central state machine with `lockForUpdate()`, amount/currency checks against `order.total_price`, idempotent provider references, and audit history
+* Admin payment updates via `PATCH /admin/orders/{order}/payment` (auth + admin + policy + FormRequest)
+* Customer-visible payment status/reference on own orders only
+* Checkout initializes `payment_status=pending` and a stub pending transaction; checkout form uses a one-time idempotency token
+* Database notifications for payment successful / failed / cancelled
+
+Vendors cannot mutate payments. Live M-Pesa/card/PayPal charging, payouts, commissions, wallets, and full refund workflows remain out of scope.
+
 ## Technology Stack
 
 * PHP 8.2+

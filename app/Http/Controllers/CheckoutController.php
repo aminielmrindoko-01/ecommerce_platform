@@ -17,6 +17,7 @@ use App\Models\Coupon;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
+use App\Services\PaymentService;
 use App\Support\Marketplace;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -156,6 +157,9 @@ class CheckoutController extends Controller
         $phonePrefix = Marketplace::countries()[Marketplace::country()]['phone'] ?? '+255';
         $shippingRegion = Marketplace::shippingRegions()[Marketplace::countries()[Marketplace::country()]['shipping']] ?? 'East Africa';
 
+        $checkoutToken = (string) Str::uuid();
+        session(['checkout_idempotency_token' => $checkoutToken]);
+
         return view('checkout', compact(
             'cart',
             'addresses',
@@ -169,7 +173,8 @@ class CheckoutController extends Controller
             'couponCode',
             'paymentMethods',
             'phonePrefix',
-            'shippingRegion'
+            'shippingRegion',
+            'checkoutToken'
         ));
     }
 
@@ -179,7 +184,7 @@ class CheckoutController extends Controller
      * Side effects: locks product rows, decrements stock, increments sold_count.
      * Rate-limited at the route layer (throttle:10,1).
      */
-    public function place(Request $request): RedirectResponse
+    public function place(Request $request, PaymentService $payments): RedirectResponse
     {
         $sessionCart = session('cart', []);
 
@@ -199,7 +204,20 @@ class CheckoutController extends Controller
             'payment_method' => ['required', 'string', Rule::in($paymentKeys)],
             'shipping_method' => 'required|in:standard,express,pickup',
             'save_address' => 'nullable|boolean',
+            'checkout_token' => 'required|string',
         ]);
+
+        $expectedToken = session('checkout_idempotency_token');
+        $submittedToken = (string) $data['checkout_token'];
+
+        if (! is_string($expectedToken) || $expectedToken === '' || ! hash_equals($expectedToken, $submittedToken)) {
+            return redirect()
+                ->route('checkout')
+                ->with('error', 'This checkout session has already been used or expired. Please review your cart and try again.');
+        }
+
+        // Consume only after validation so bad input can retry with the same token.
+        session()->forget('checkout_idempotency_token');
 
         try {
             $order = DB::transaction(function () use ($sessionCart, $data) {
@@ -270,6 +288,7 @@ class CheckoutController extends Controller
                     'user_id' => auth()->id(),
                     'total_price' => $total,
                     'status' => 'pending',
+                    'payment_status' => 'pending',
                     'payment_method' => $data['payment_method'],
                     'shipping_method' => $data['shipping_method'],
                     'shipping_cost' => $shipping,
@@ -305,10 +324,16 @@ class CheckoutController extends Controller
                 return $order;
             });
         } catch (\RuntimeException $e) {
+            // Allow a fresh checkout attempt after a failed placement.
+            $retryToken = (string) Str::uuid();
+            session(['checkout_idempotency_token' => $retryToken]);
+
             return redirect()->route('cart.index')->with('error', $e->getMessage());
         }
 
         session()->forget(['cart', 'coupon_code']);
+
+        $payments->ensurePendingTransaction($order, 'stub');
 
         OrderPlaced::dispatch($order->load('items.product.vendor.user'));
 
@@ -323,7 +348,7 @@ class CheckoutController extends Controller
     {
         abort_unless($order->user_id === auth()->id() || auth()->user()?->isAdmin(), 403);
 
-        $order->load('items.product');
+        $order->load(['items.product', 'latestPaymentTransaction']);
 
         return view('checkout-confirmation', compact('order'));
     }

@@ -59,7 +59,7 @@ class AccountController extends Controller
     public function showOrder(Order $order, OrderFulfillmentSummary $summary): View
     {
         abort_unless($order->user_id === auth()->id(), 403);
-        $order->load(['items.product.vendor']);
+        $order->load(['items.product.vendor', 'latestPaymentTransaction']);
 
         $itemsByVendor = $order->items
             ->groupBy(fn ($item) => $item->product?->vendor_id ?? 0)
