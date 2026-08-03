@@ -38,6 +38,15 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(PaymentGatewayInterface::class, function ($app) {
             return $app->make(PaymentGatewayManager::class)->default();
         });
+
+        $this->app->singleton(\App\Support\Finance\StubPayoutGateway::class);
+        $this->app->bind(\App\Contracts\PayoutGatewayInterface::class, function ($app) {
+            $key = (string) config('finance.payout.default', 'stub');
+
+            return match ($key) {
+                default => $app->make(\App\Support\Finance\StubPayoutGateway::class),
+            };
+        });
     }
 
     /**

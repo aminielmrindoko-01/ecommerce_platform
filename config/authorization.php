@@ -94,8 +94,12 @@ return [
         'payments.manage',
         'refunds.create',
         'payouts.view',
+        'payouts.approve',
+        'payouts.reject',
         'payouts.process',
         'transactions.view',
+        'ledger.view',
+        'finance.reports.view',
 
         // Audit / security
         'audit_logs.view',
@@ -140,6 +144,7 @@ return [
             'reviews.view', 'reviews.moderate', 'reviews.approve', 'reviews.reject', 'reviews.hide', 'reviews.restore', 'reviews.flag',
             'users.view', 'users.create', 'users.update', 'users.suspend',
             'payments.view', 'payments.manage', 'transactions.view', 'refunds.create',
+            'payouts.view', 'payouts.approve', 'ledger.view', 'finance.reports.view',
             'audit_logs.view',
             'settings.view',
         ],
@@ -194,7 +199,8 @@ return [
         'finance_manager' => [
             'admin.access', 'dashboard.view',
             'payments.view', 'payments.manage', 'transactions.view', 'refunds.create',
-            'payouts.view', 'payouts.process',
+            'payouts.view', 'payouts.approve', 'payouts.reject', 'payouts.process',
+            'ledger.view', 'finance.reports.view',
             'orders.view',
         ],
 
@@ -202,7 +208,7 @@ return [
             'admin.access', 'dashboard.view',
             'audit_logs.view', 'security_events.view',
             'orders.view', 'products.view', 'vendors.view', 'customers.view',
-            'payments.view', 'transactions.view',
+            'payments.view', 'transactions.view', 'ledger.view', 'finance.reports.view', 'payouts.view',
             'reviews.view',
         ],
 

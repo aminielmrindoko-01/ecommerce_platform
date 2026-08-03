@@ -30,4 +30,9 @@ Route::middleware(['auth', 'vendor'])->prefix('vendor')->name('vendor.')->group(
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
+
+    Route::get('/finance', [\App\Http\Controllers\Vendor\FinanceController::class, 'index'])->name('finance.index');
+    Route::post('/finance/payout', [\App\Http\Controllers\Vendor\FinanceController::class, 'requestPayout'])
+        ->middleware('throttle:10,1')
+        ->name('finance.payout');
 });

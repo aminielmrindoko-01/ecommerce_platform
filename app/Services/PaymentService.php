@@ -288,6 +288,8 @@ class PaymentService
 
                 // Idempotent success: ensure inventory committed once.
                 $this->inventorySettlement->commitForPaidOrder($lockedOrder, $actor);
+                app(\App\Services\Finance\VendorEntitlementService::class)
+                    ->settlePaidPayment($tx->fresh(), $actor);
 
                 return ['tx' => $tx, 'changed' => false, 'event' => null];
             }
@@ -378,6 +380,8 @@ class PaymentService
 
             if ($nextStatus === 'paid') {
                 $this->inventorySettlement->commitForPaidOrder($lockedOrder, $actor);
+                app(\App\Services\Finance\VendorEntitlementService::class)
+                    ->settlePaidPayment($tx->fresh(), $actor);
             }
 
             if (in_array($nextStatus, ['failed', 'cancelled', 'expired'], true)) {
