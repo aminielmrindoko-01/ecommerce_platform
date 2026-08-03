@@ -13,7 +13,9 @@
     <div style="display:flex;justify-content:space-between;"><span>Refunds</span><strong>{{ money($summary['refunds_net']) }}</strong></div>
     <div style="display:flex;justify-content:space-between;"><span>Payable</span><strong>{{ money($summary['payable_ledger']) }}</strong></div>
     <div style="display:flex;justify-content:space-between;"><span>Paid out</span><strong>{{ money($summary['paid_out']) }}</strong></div>
+    <div style="display:flex;justify-content:space-between;"><span>Settlement holds</span><strong>{{ money($summary['settlement_holds'] ?? 0) }}</strong></div>
     <div style="display:flex;justify-content:space-between;"><span>Available</span><strong>{{ money($summary['available']) }}</strong></div>
+    <div style="display:flex;justify-content:space-between;"><span>Financial status</span><strong>{{ $summary['financial_status'] ?? 'active' }}</strong></div>
 </div>
 
 <div class="panel" style="margin-top:1rem;max-width:420px;">

@@ -100,6 +100,22 @@ return [
         'transactions.view',
         'ledger.view',
         'finance.reports.view',
+        'commission.manage',
+        'settlement_holds.view',
+        'settlement_holds.manage',
+
+        // Marketplace operations (Phase 7)
+        'returns.view',
+        'returns.manage',
+        'returns.approve',
+        'disputes.view',
+        'disputes.respond',
+        'disputes.resolve',
+        'disputes.manage',
+        'chargebacks.view',
+        'chargebacks.create',
+        'chargebacks.manage',
+        'chargebacks.resolve',
 
         // Audit / security
         'audit_logs.view',
@@ -145,6 +161,10 @@ return [
             'users.view', 'users.create', 'users.update', 'users.suspend',
             'payments.view', 'payments.manage', 'transactions.view', 'refunds.create',
             'payouts.view', 'payouts.approve', 'ledger.view', 'finance.reports.view',
+            'returns.view', 'returns.manage', 'returns.approve',
+            'disputes.view', 'disputes.respond', 'disputes.resolve', 'disputes.manage',
+            'chargebacks.view', 'chargebacks.create', 'chargebacks.manage',
+            'settlement_holds.view', 'settlement_holds.manage',
             'audit_logs.view',
             'settings.view',
         ],
@@ -168,6 +188,8 @@ return [
             'products.view', 'inventory.view',
             'customers.view',
             'payments.view',
+            'returns.view', 'returns.approve',
+            'disputes.view', 'disputes.respond',
         ],
 
         'customer_support' => [
@@ -176,6 +198,10 @@ return [
             'orders.view',
             'reviews.view',
             'payments.view',
+            'returns.view', 'returns.approve',
+            'disputes.view', 'disputes.respond', 'disputes.resolve',
+            'chargebacks.view',
+            'settlement_holds.view',
         ],
 
         'vendor_manager' => [
@@ -201,6 +227,10 @@ return [
             'payments.view', 'payments.manage', 'transactions.view', 'refunds.create',
             'payouts.view', 'payouts.approve', 'payouts.reject', 'payouts.process',
             'ledger.view', 'finance.reports.view',
+            'commission.manage',
+            'settlement_holds.view', 'settlement_holds.manage',
+            'chargebacks.view', 'chargebacks.create', 'chargebacks.manage', 'chargebacks.resolve',
+            'returns.view',
             'orders.view',
         ],
 
@@ -209,6 +239,7 @@ return [
             'audit_logs.view', 'security_events.view',
             'orders.view', 'products.view', 'vendors.view', 'customers.view',
             'payments.view', 'transactions.view', 'ledger.view', 'finance.reports.view', 'payouts.view',
+            'returns.view', 'disputes.view', 'chargebacks.view', 'settlement_holds.view',
             'reviews.view',
         ],
 

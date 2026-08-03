@@ -15,6 +15,9 @@
     @if($user?->hasPermission('orders.view'))
         <a class="chip {{ request()->routeIs('admin.orders') ? 'is-active' : '' }}" href="{{ route('admin.orders') }}">Orders</a>
     @endif
+    @if($user?->hasPermission('returns.view') || $user?->hasPermission('disputes.view') || $user?->hasPermission('chargebacks.view') || $user?->hasPermission('settlement_holds.view'))
+        <a class="chip {{ request()->routeIs('admin.operations.*') ? 'is-active' : '' }}" href="{{ route('admin.operations.returns') }}">Operations</a>
+    @endif
     @if($user?->hasPermission('payments.view') || $user?->hasPermission('transactions.view') || $user?->hasPermission('ledger.view') || $user?->hasPermission('payouts.view'))
         <a class="chip {{ request()->routeIs('admin.payments.*') || request()->routeIs('admin.finance.*') ? 'is-active' : '' }}" href="{{ route('admin.payments.index') }}">Finance</a>
     @endif

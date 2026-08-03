@@ -29,6 +29,10 @@ return [
     |--------------------------------------------------------------------------
     | Hours after payment before funds are available for payout.
     | 0 = immediately available (still ledger-tracked).
+    |
+    | Phase 7 also uses explicit settlement_holds rows for returns/disputes/
+    | chargebacks. Entitlement available_at is the time-based settlement period;
+    | settlement_holds are event-driven freezes (see docs/MARKETPLACE_OPERATIONS.md).
     */
     'settlement_hold_hours' => (int) env('FINANCE_SETTLEMENT_HOLD_HOURS', 0),
 

@@ -2,22 +2,22 @@
 
 namespace App\Services\Finance;
 
-use App\Models\User;
 use App\Models\Vendor;
 use App\Models\VendorEntitlement;
 use App\Models\VendorPayout;
+use App\Services\Operations\SettlementHoldService;
 use App\Services\PaymentService;
-use Illuminate\Support\Facades\DB;
 
 /**
  * Vendor payable balances derived from the ledger (authoritative)
- * with entitlement hold awareness for available-to-withdraw.
+ * with entitlement hold + explicit settlement_holds awareness.
  */
 class VendorPayableService
 {
     public function __construct(
         protected LedgerService $ledger,
         protected PaymentService $payments,
+        protected SettlementHoldService $holds,
     ) {}
 
     /**
@@ -29,7 +29,10 @@ class VendorPayableService
      *   payable_ledger:string,
      *   paid_out:string,
      *   available:string,
-     *   pending_payouts:string
+     *   pending_payouts:string,
+     *   settlement_holds:string,
+     *   entitlement_holds:string,
+     *   financial_status:string
      * }
      */
     public function summaryForVendor(Vendor $vendor): array
@@ -41,7 +44,7 @@ class VendorPayableService
         $sales = '0.00';
         $commission = '0.00';
         $refundsNet = '0.00';
-        $heldNet = '0.00';
+        $entitlementHeld = '0.00';
 
         foreach ($ents as $ent) {
             $sales = bcadd($sales, $this->payments->normalizeMoney($ent->gross_amount), 2);
@@ -49,7 +52,7 @@ class VendorPayableService
             $refundsNet = bcadd($refundsNet, $this->payments->normalizeMoney($ent->refunded_net), 2);
             $remaining = $ent->remainingNet();
             if ($ent->available_at && $ent->available_at->isFuture()) {
-                $heldNet = bcadd($heldNet, $remaining, 2);
+                $entitlementHeld = bcadd($entitlementHeld, $remaining, 2);
             }
         }
 
@@ -67,10 +70,17 @@ class VendorPayableService
             ->sum('amount');
         $pending = $this->payments->normalizeMoney($pending ?: '0');
 
-        // Available = ledger payable − open payouts − settlement holds.
+        $explicitHolds = $this->holds->activeHeldAmount($vendorId);
+
+        // Available = ledger payable − open payouts − entitlement settlement period − explicit holds.
         $available = bcsub($payableLedger, $pending, 2);
-        $available = bcsub($available, $heldNet, 2);
+        $available = bcsub($available, $entitlementHeld, 2);
+        $available = bcsub($available, $explicitHolds, 2);
         if (bccomp($available, '0.00', 2) < 0) {
+            $available = '0.00';
+        }
+
+        if (! $vendor->canRequestPayout()) {
             $available = '0.00';
         }
 
@@ -83,6 +93,9 @@ class VendorPayableService
             'paid_out' => $paidOut,
             'available' => $available,
             'pending_payouts' => $pending,
+            'settlement_holds' => $explicitHolds,
+            'entitlement_holds' => $entitlementHeld,
+            'financial_status' => $vendor->financialStatus(),
         ];
     }
 

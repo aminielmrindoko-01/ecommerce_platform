@@ -8,6 +8,7 @@ use App\Models\PaymentTransaction;
 use App\Models\User;
 use App\Models\VendorEntitlement;
 use App\Services\Authorization\AuditLogger;
+use App\Services\Operations\CommissionConfigService;
 use App\Services\PaymentService;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -20,6 +21,7 @@ class VendorEntitlementService
 {
     public function __construct(
         protected CommissionCalculator $commission,
+        protected CommissionConfigService $commissionConfigs,
         protected LedgerService $ledger,
         protected PaymentService $payments,
         protected AuditLogger $audit,
@@ -63,7 +65,8 @@ class VendorEntitlementService
                 }
 
                 $gross = $item->lineTotal();
-                $calc = $this->commission->forGross($gross);
+                $override = $this->commissionConfigs->resolveForVendor($vendorId);
+                $calc = $this->commission->forGross($gross, $override);
 
                 $ent = new VendorEntitlement;
                 $ent->forceFill([
@@ -204,10 +207,14 @@ class VendorEntitlementService
 
             /** @var Order $order */
             $order = Order::query()->whereKey($refund->order_id)->lockForUpdate()->firstOrFail();
-            $ents = VendorEntitlement::query()
+            $itemIds = $refund->metadata['order_item_ids'] ?? null;
+            $entsQuery = VendorEntitlement::query()
                 ->where('order_id', $order->id)
-                ->lockForUpdate()
-                ->get();
+                ->lockForUpdate();
+            if (is_array($itemIds) && $itemIds !== []) {
+                $entsQuery->whereIn('order_item_id', $itemIds);
+            }
+            $ents = $entsQuery->get();
 
             if ($ents->isEmpty()) {
                 return;
@@ -215,6 +222,7 @@ class VendorEntitlementService
 
             $refundAmount = $this->payments->normalizeMoney($refund->getAttributes()['amount'] ?? $refund->amount);
             $currency = $refund->currency ?: config('finance.currency', 'TZS');
+            $itemScoped = is_array($itemIds) && $itemIds !== [];
 
             $totalGross = '0.00';
             foreach ($ents as $ent) {
@@ -243,7 +251,10 @@ class VendorEntitlementService
                 );
                 $remainingGross = $this->nonNegative($remainingGross);
 
-                if ($i === $lastIndex) {
+                if ($itemScoped && $ents->count() === 1) {
+                    // Return-linked refund: allocate exact refund amount to the item entitlement.
+                    $shareGross = $refundAmount;
+                } elseif ($i === $lastIndex) {
                     $shareGross = bcsub($refundAmount, $allocated, 2);
                 } else {
                     $shareGross = bcdiv(bcmul($refundAmount, $remainingGross, 4), $totalGross, 2);
