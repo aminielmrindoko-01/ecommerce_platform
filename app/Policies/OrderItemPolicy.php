@@ -49,9 +49,14 @@ class OrderItemPolicy
             return false;
         }
 
+        $vendorId = (int) $user->vendor->id;
+        if ($orderItem->vendor_id && (int) $orderItem->vendor_id === $vendorId) {
+            return true;
+        }
+
         $orderItem->loadMissing('product');
 
         return $orderItem->product
-            && (int) $orderItem->product->vendor_id === (int) $user->vendor->id;
+            && (int) $orderItem->product->vendor_id === $vendorId;
     }
 }

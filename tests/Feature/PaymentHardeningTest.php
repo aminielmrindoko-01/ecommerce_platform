@@ -78,7 +78,7 @@ class PaymentHardeningTest extends TestCase
 
         $order->refresh();
         $this->assertSame('paid', $order->payment_status);
-        $this->assertSame('paid', $order->status);
+        $this->assertSame('confirmed', $order->status);
         Notification::assertSentTo($customer, CustomerPaymentUpdated::class);
     }
 

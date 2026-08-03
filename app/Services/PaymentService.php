@@ -228,9 +228,9 @@ class PaymentService
             $tx->save();
 
             $lockedOrder->payment_status = $nextStatus;
-            // Soft-sync legacy orders.status for admin revenue KPIs when first paid.
-            if ($nextStatus === 'paid' && ($lockedOrder->status ?: 'pending') === 'pending') {
-                $lockedOrder->status = 'paid';
+            // Soft-sync marketplace order lifecycle when first paid.
+            if ($nextStatus === 'paid' && in_array(($lockedOrder->status ?: 'pending'), ['pending', 'paid'], true)) {
+                $lockedOrder->status = 'confirmed';
             }
             $lockedOrder->save();
 

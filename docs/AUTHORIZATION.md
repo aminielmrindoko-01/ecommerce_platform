@@ -93,7 +93,10 @@ Do **not** introduce a second authorization system. Extend this stack.
 | `/admin/users` | GET | admin | `users.view` | — | — |
 | `/admin/users/{id}` | PUT | admin | `users.update` | **stepup** | `USER_ROLE_CHANGED` |
 | `/admin/vendors` | GET | admin | `vendors.view` | — | — |
+| `/admin/vendors/{vendor}/status` | POST | admin | approve/reject/suspend/update | — | vendor lifecycle |
 | `/admin/vendors/{id}/toggle` | POST | admin | `vendors.suspend` / approve | — | vendor suspend/approve |
+| `/vendor/apply` | GET/POST | auth | customer apply | throttle | `VENDOR_APPLICATION_SUBMITTED` |
+| `/account/orders/{order}/cancel` | POST | auth | own order + cancel rules | — | `ORDER_CANCELLED` |
 | `/admin/reviews` | GET | admin | `reviews.view` | — | — |
 | `/admin/reviews/{review}/moderate` | PATCH | admin | `reviews.moderate` (+ action) | — | review approve/reject |
 | `/admin/roles` | GET | admin | `roles.view` | — | — |
@@ -103,15 +106,20 @@ Do **not** introduce a second authorization system. Extend this stack.
 
 ## 7. Vendor isolation
 
-- `VendorMiddleware`: marketplace `users.role === vendor` **and** `vendor.access` **and** vendor profile
+- `VendorMiddleware`: marketplace `users.role === vendor` **and** `vendor.access` **and** linked store **and** `vendor.canSell()` (approved lifecycle)
+- Vendor lifecycle transitions use `VendorLifecycleService` with `vendors.approve` / `reject` / `suspend` / `update`
 - Policies deny cross-vendor product/order/inventory access
+- Order item ownership prefers `order_items.vendor_id` snapshot
 - Never trust client `vendor_id` for ownership
+
+See also `docs/ORDER_ARCHITECTURE.md`.
 
 ## 8. Customer isolation
 
 - Orders, addresses, wishlist scoped to `auth.id`
 - Policies deny IDOR/BOLA across customers
 - Never trust client `user_id` / `customer_id`
+- Customer cancel uses `OrderPolicy::cancel` + `OrderService` (pending/confirmed only)
 
 ## 9. MFA
 
@@ -146,7 +154,7 @@ Configurable sensitive actions (extend middleware on routes): Super Admin creati
 
 Append-only `audit_logs`. Ordinary admins cannot mutate history (no update/delete routes).
 
-Events include: `LOGIN_SUCCESS`, `LOGIN_FAILED`, `PERMISSION_DENIED`, `USER_ROLE_CHANGED`, `PRODUCT_*`, `ORDER_STATUS_CHANGED`, `VENDOR_*`, `REVIEW_*`, `MFA_*`, `STEP_UP_*`, security setting changes.
+Events include: `LOGIN_SUCCESS`, `LOGIN_FAILED`, `PERMISSION_DENIED`, `USER_ROLE_CHANGED`, `PRODUCT_*`, `ORDER_CREATED`, `ORDER_CONFIRMED`, `ORDER_PROCESSING`, `ORDER_SHIPPED`, `ORDER_DELIVERED`, `ORDER_CANCELLED`, `VENDOR_*`, `REVIEW_*`, `MFA_*`, `STEP_UP_*`, security setting changes.
 
 Payloads should reconstruct actor, target, before/after where applicable — **never** secrets.
 
@@ -268,6 +276,10 @@ Step-up (`stepup`) is required for: privileged role changes, MFA disable, and fu
 ### Catalog operations note
 
 Product/category/inventory admin modules use the services in `App\Services\Catalog\*` and existing RBAC permissions. Stock mutations go through `InventoryService` (locked + audited). See `docs/CATALOG_OPERATIONS.md`.
+
+### Marketplace / orders note (Phase 4)
+
+Multi-vendor orders, vendor lifecycle, order state machine, and cart price security are documented in `docs/ORDER_ARCHITECTURE.md`. Checkout uses `OrderService` + transitional reserve→commit; payment remains `PaymentService` / `PaymentGatewayInterface`.
 
 ---
 

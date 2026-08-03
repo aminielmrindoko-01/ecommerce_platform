@@ -64,18 +64,56 @@ class OrderItem extends Model
     /**
      * Create a line item at checkout with explicit column assignment
      * (avoids mass-assigning ownership/financial fields from requests).
+     * Snapshots preserve historical product/vendor identity after catalog edits.
      */
-    public static function recordPurchase(int $orderId, int $productId, int $quantity, float|string $unitPrice): self
-    {
+    public static function recordPurchase(
+        int $orderId,
+        int $productId,
+        int $quantity,
+        float|string $unitPrice,
+        ?int $vendorId = null,
+        ?string $productName = null,
+        ?string $productSku = null,
+        ?string $vendorStoreName = null,
+    ): self {
         $item = new self;
         $item->order_id = $orderId;
         $item->product_id = $productId;
         $item->quantity = $quantity;
         $item->price = $unitPrice;
         $item->fulfillment_status = 'pending';
+        $item->vendor_id = $vendorId;
+        $item->product_name = $productName;
+        $item->product_sku = $productSku;
+        $item->vendor_store_name = $vendorStoreName;
         $item->save();
 
         return $item;
+    }
+
+    public function vendor(): BelongsTo
+    {
+        return $this->belongsTo(Vendor::class);
+    }
+
+    /**
+     * Prefer snapshot name; fall back to live product.
+     */
+    public function displayName(): string
+    {
+        return $this->product_name ?: ($this->product?->name ?? 'Product');
+    }
+
+    /**
+     * Effective vendor id from snapshot or live product relation.
+     */
+    public function owningVendorId(): ?int
+    {
+        if ($this->vendor_id) {
+            return (int) $this->vendor_id;
+        }
+
+        return $this->product?->vendor_id ? (int) $this->product->vendor_id : null;
     }
 
     /**

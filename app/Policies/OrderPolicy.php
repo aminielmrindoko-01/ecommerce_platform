@@ -20,15 +20,25 @@ class OrderPolicy
             return true;
         }
 
+        // Platform staff with admin shell + orders.view (e.g. customer_support, auditor).
+        if ($user->hasPermission('admin.access')) {
+            return true;
+        }
+
         // Customer owns the order.
         if ((int) $order->user_id === (int) $user->id) {
             return true;
         }
 
-        // Vendor may view if they have a line item on the order.
+        // Vendor may view if they have a line item on the order (snapshot or live product).
         if ($user->isVendor() && $user->vendor) {
+            $vendorId = (int) $user->vendor->id;
+
             return $order->items()
-                ->whereHas('product', fn ($q) => $q->where('vendor_id', $user->vendor->id))
+                ->where(function ($q) use ($vendorId) {
+                    $q->where('vendor_id', $vendorId)
+                        ->orWhereHas('product', fn ($pq) => $pq->where('vendor_id', $vendorId));
+                })
                 ->exists();
         }
 
@@ -42,5 +52,10 @@ class OrderPolicy
         }
 
         return $user->hasPermission('orders.manage_any');
+    }
+
+    public function cancel(User $user, Order $order): bool
+    {
+        return app(\App\Services\Orders\OrderService::class)->actorMayCancel($order, $user);
     }
 }

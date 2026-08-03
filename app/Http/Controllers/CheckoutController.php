@@ -15,17 +15,15 @@ use App\Events\OrderPlaced;
 use App\Models\Address;
 use App\Models\Coupon;
 use App\Models\Order;
-use App\Models\OrderItem;
 use App\Models\PaymentTransaction;
 use App\Models\Product;
 use App\Services\CheckoutIdempotencyService;
+use App\Services\Orders\OrderService;
 use App\Services\PaymentGatewayManager;
 use App\Services\PaymentService;
 use App\Support\Marketplace;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use InvalidArgumentException;
@@ -53,6 +51,11 @@ class CheckoutController extends Controller
 
             if (! $product) {
                 $errors[] = 'A product in your cart is no longer available.';
+                continue;
+            }
+
+            if (! $product->isPublished()) {
+                $errors[] = "{$product->name} is not available for purchase.";
                 continue;
             }
 
@@ -157,17 +160,14 @@ class CheckoutController extends Controller
     }
 
     /**
-     * Create order + items in a DB transaction, optionally save address, clear cart.
-     *
-     * Side effects: locks product rows, decrements stock, increments sold_count.
-     * Checkout token consumption is atomic with order creation (lockForUpdate).
+     * Create order via OrderService (server prices, inventory reserve+commit, audits).
      * Rate-limited at the route layer (throttle:10,1).
      */
     public function place(
         Request $request,
         PaymentService $payments,
-        CheckoutIdempotencyService $checkoutIds,
-        PaymentGatewayManager $gateways
+        PaymentGatewayManager $gateways,
+        OrderService $orders,
     ): RedirectResponse {
         $sessionCart = session('cart', []);
 
@@ -190,118 +190,47 @@ class CheckoutController extends Controller
             'checkout_token' => 'required|string|max:64',
         ]);
 
+        foreach (['user_id', 'vendor_id', 'customer_id', 'role', 'permissions'] as $forbidden) {
+            if ($request->exists($forbidden)) {
+                abort(422, 'Invalid checkout payload.');
+            }
+        }
+
+        // Financial / status fields from the client are ignored (never trusted).
+        // OrderService recalculates prices and totals from the database.
+
         try {
-            $order = DB::transaction(function () use ($sessionCart, $data, $checkoutIds) {
-                $idempotencyKey = $checkoutIds->lockConsumable(
-                    $data['checkout_token'],
-                    (int) auth()->id()
-                );
-
-                $lines = [];
-                $subtotal = 0.0;
-
-                foreach ($sessionCart as $productId => $item) {
-                    /** @var Product|null $product */
-                    $product = Product::query()->whereKey($productId)->lockForUpdate()->first();
-
-                    if (! $product) {
-                        throw new \RuntimeException('A product in your cart is no longer available.');
-                    }
-
-                    $quantity = max(1, (int) ($item['quantity'] ?? 1));
-
-                    if ($product->stock < $quantity) {
-                        throw new \RuntimeException(
-                            $product->stock < 1
-                                ? "{$product->name} is out of stock."
-                                : "{$product->name} only has {$product->stock} in stock."
-                        );
-                    }
-
-                    $unitPrice = (float) $product->price;
-                    $lines[] = [
-                        'product' => $product,
-                        'quantity' => $quantity,
-                        'unit_price' => $unitPrice,
-                    ];
-                    $subtotal += $unitPrice * $quantity;
-                }
-
-                if ($lines === []) {
-                    throw new \RuntimeException('Your cart is empty or no longer available.');
-                }
-
-                $couponCode = session('coupon_code');
-                $coupon = $couponCode ? Coupon::where('code', $couponCode)->first() : null;
-                $discount = $coupon ? $coupon->discountFor($subtotal) : 0;
-
-                $shippingMap = [
-                    'standard' => $subtotal >= 150000 ? 0 : 8000,
-                    'express' => 18000,
-                    'pickup' => 0,
-                ];
-                $shipping = $shippingMap[$data['shipping_method']];
-                $tax = round(($subtotal - $discount) * Marketplace::taxRate(), 2);
-                $total = max(0, $subtotal - $discount + $shipping + $tax);
-
-                if ($data['save_address'] ?? false) {
-                    $address = new Address([
-                        'label' => 'Checkout',
-                        'full_name' => $data['full_name'],
-                        'phone' => $data['phone'],
-                        'line1' => $data['line1'],
-                        'line2' => $data['line2'] ?? null,
-                        'city' => $data['city'],
-                        'region' => $data['region'] ?? null,
-                        'country' => 'Tanzania',
-                        'is_default' => ! auth()->user()->addresses()->exists(),
-                    ]);
-                    $address->user_id = auth()->id();
-                    $address->save();
-                }
-
-                $order = Order::create([
-                    'order_number' => 'SN-'.strtoupper(Str::random(8)),
-                    'user_id' => auth()->id(),
-                    'total_price' => $total,
-                    'status' => 'pending',
-                    'payment_status' => 'pending',
-                    'payment_method' => $data['payment_method'],
-                    'shipping_method' => $data['shipping_method'],
-                    'shipping_cost' => $shipping,
-                    'tax_amount' => $tax,
-                    'discount_amount' => $discount,
-                    'coupon_code' => $coupon?->code,
-                    'shipping_address' => [
-                        'full_name' => $data['full_name'],
-                        'phone' => $data['phone'],
-                        'line1' => $data['line1'],
-                        'line2' => $data['line2'] ?? null,
-                        'city' => $data['city'],
-                        'region' => $data['region'] ?? null,
-                        'country' => 'Tanzania',
-                    ],
+            if ($data['save_address'] ?? false) {
+                $address = new Address([
+                    'label' => 'Checkout',
+                    'full_name' => $data['full_name'],
+                    'phone' => $data['phone'],
+                    'line1' => $data['line1'],
+                    'line2' => $data['line2'] ?? null,
+                    'city' => $data['city'],
+                    'region' => $data['region'] ?? null,
+                    'country' => 'Tanzania',
+                    'is_default' => ! auth()->user()->addresses()->exists(),
                 ]);
+                $address->user_id = auth()->id();
+                $address->save();
+            }
 
-                foreach ($lines as $line) {
-                    /** @var Product $product */
-                    $product = $line['product'];
-
-                    OrderItem::recordPurchase(
-                        $order->id,
-                        $product->id,
-                        $line['quantity'],
-                        $line['unit_price']
-                    );
-
-                    $product->decrement('stock', $line['quantity']);
-                    $product->increment('sold_count', $line['quantity']);
-                }
-
-                $checkoutIds->markConsumed($idempotencyKey, (int) $order->id);
-
-                return $order;
-            });
+            $order = $orders->place(auth()->user(), $sessionCart, [
+                'payment_method' => $data['payment_method'],
+                'shipping_method' => $data['shipping_method'],
+                'checkout_token' => $data['checkout_token'],
+                'coupon_code' => session('coupon_code'),
+                'shipping_address' => [
+                    'full_name' => $data['full_name'],
+                    'phone' => $data['phone'],
+                    'line1' => $data['line1'],
+                    'line2' => $data['line2'] ?? null,
+                    'city' => $data['city'],
+                    'region' => $data['region'] ?? null,
+                    'country' => 'Tanzania',
+                ],
+            ]);
         } catch (InvalidArgumentException $e) {
             if (str_contains($e->getMessage(), 'already processed')) {
                 return redirect()
@@ -324,7 +253,6 @@ class CheckoutController extends Controller
 
         OrderPlaced::dispatch($order->load('items.product.vendor.user'));
 
-        // Gateway init never marks paid — status remains pending until verified.
         return redirect()
             ->route('checkout.confirmation', $order)
             ->with('success', 'Order placed successfully.')
