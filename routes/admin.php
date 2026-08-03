@@ -7,6 +7,7 @@
  */
 
 use App\Http\Controllers\Admin\CategoryController as AdminCategoryController;
+use App\Http\Controllers\Admin\FinanceController as AdminFinanceController;
 use App\Http\Controllers\Admin\InventoryController as AdminInventoryController;
 use App\Http\Controllers\Admin\PaymentController as AdminPaymentController;
 use App\Http\Controllers\Admin\ProductController as AdminProductController;
@@ -91,6 +92,31 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::post('/payments/{payment}/refund', [AdminPaymentController::class, 'storeRefund'])
         ->middleware(['permission:refunds.create', 'stepup'])
         ->name('payments.refund');
+
+    Route::get('/finance/ledger', [AdminFinanceController::class, 'ledger'])
+        ->middleware('permission:ledger.view')
+        ->name('finance.ledger');
+    Route::get('/finance/payables', [AdminFinanceController::class, 'payables'])
+        ->middleware('permission:payouts.view,finance.reports.view')
+        ->name('finance.payables');
+    Route::get('/finance/payouts', [AdminFinanceController::class, 'payouts'])
+        ->middleware('permission:payouts.view')
+        ->name('finance.payouts');
+    Route::get('/finance/entitlements', [AdminFinanceController::class, 'entitlements'])
+        ->middleware('permission:ledger.view,finance.reports.view')
+        ->name('finance.entitlements');
+    Route::get('/finance/reports', [AdminFinanceController::class, 'reports'])
+        ->middleware('permission:finance.reports.view')
+        ->name('finance.reports');
+    Route::post('/finance/payouts/{payout}/approve', [AdminFinanceController::class, 'approvePayout'])
+        ->middleware(['permission:payouts.approve,payouts.process', 'stepup'])
+        ->name('finance.payouts.approve');
+    Route::post('/finance/payouts/{payout}/reject', [AdminFinanceController::class, 'rejectPayout'])
+        ->middleware(['permission:payouts.reject,payouts.approve', 'stepup'])
+        ->name('finance.payouts.reject');
+    Route::post('/finance/payouts/{payout}/process', [AdminFinanceController::class, 'processPayout'])
+        ->middleware(['permission:payouts.process', 'stepup'])
+        ->name('finance.payouts.process');
 
     // Categories
     Route::get('/categories', [AdminCategoryController::class, 'index'])

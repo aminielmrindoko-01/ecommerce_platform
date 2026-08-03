@@ -93,6 +93,11 @@ Do **not** introduce a second authorization system. Extend this stack.
 | `/admin/payments/{payment}/refund` | POST | admin | `refunds.create` | **stepup** | `REFUND_*` |
 | `/admin/payments/reconciliations` | GET | admin | `payments.view` | — | — |
 | `/account/payments` | GET | auth | own payments | — | — |
+| `/admin/finance/ledger` | GET | admin | `ledger.view` | — | — |
+| `/admin/finance/payouts` | GET | admin | `payouts.view` | — | — |
+| `/admin/finance/payouts/{id}/approve` | POST | admin | `payouts.approve` | **stepup** | `PAYOUT_APPROVED` |
+| `/admin/finance/payouts/{id}/process` | POST | admin | `payouts.process` | **stepup** | `PAYOUT_COMPLETED` |
+| `/vendor/finance` | GET | vendor | own finance | — | — |
 | `/admin/orders/…/fulfillment` | PATCH | admin | `orders.update` | — | fulfillment |
 | `/admin/users` | GET | admin | `users.view` | — | — |
 | `/admin/users/{id}` | PUT | admin | `users.update` | **stepup** | `USER_ROLE_CHANGED` |
@@ -290,6 +295,12 @@ Multi-vendor orders, vendor lifecycle, order state machine, and cart price secur
 Payment attempts, inventory settlement on verified payment, refunds (step-up), reconciliation flags, and webhook replay protections are documented in `docs/PAYMENT_ARCHITECTURE.md`.
 
 **PAYMENT INTEGRATION STATUS: SANDBOX / NOT PRODUCTION-READY** (stub default; PesaPal sandbox optional).
+
+### Finance / ledger note (Phase 6)
+
+Double-entry ledger, vendor entitlements, commission snapshots, payable derivation, and sandbox payouts are documented in `docs/FINANCE_ARCHITECTURE.md`.
+
+**PAYOUT INTEGRATION STATUS: SANDBOX / NOT PRODUCTION-READY**
 
 ---
 

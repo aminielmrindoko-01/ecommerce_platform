@@ -170,6 +170,9 @@ class RefundService
                 reason: $reason,
             );
 
+            app(\App\Services\Finance\VendorEntitlementService::class)
+                ->reverseForRefund($refund->fresh(), $actor);
+
             return $refund->fresh(['paymentTransaction', 'order']);
         });
     }
