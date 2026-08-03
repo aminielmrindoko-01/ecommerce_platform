@@ -41,12 +41,17 @@ class RefundService
      * Request + immediately complete a manual refund (foundation/admin path).
      * Uses step-up at the route layer for authorization.
      */
+    /**
+     * @param  array<string, mixed>  $metadata
+     */
     public function refund(
         Order $order,
         string $amount,
         User $actor,
         string $reason,
         ?string $providerReference = null,
+        ?int $returnRequestId = null,
+        array $metadata = [],
     ): PaymentRefund {
         if (! $actor->hasPermission('refunds.create') && ! $actor->hasPermission('orders.refund')) {
             throw new InvalidArgumentException('Missing refund permission.');
@@ -62,7 +67,7 @@ class RefundService
             throw new InvalidArgumentException('A refund reason is required.');
         }
 
-        return DB::transaction(function () use ($order, $amount, $actor, $reason, $providerReference) {
+        return DB::transaction(function () use ($order, $amount, $actor, $reason, $providerReference, $returnRequestId, $metadata) {
             /** @var Order $lockedOrder */
             $lockedOrder = Order::query()->whereKey($order->id)->lockForUpdate()->firstOrFail();
 
@@ -96,6 +101,7 @@ class RefundService
             $refund->forceFill([
                 'payment_transaction_id' => $tx->id,
                 'order_id' => $lockedOrder->id,
+                'return_request_id' => $returnRequestId,
                 'actor_user_id' => $actor->id,
                 'reference' => $this->generateReference(),
                 'amount' => $amount,
@@ -103,7 +109,7 @@ class RefundService
                 'status' => 'requested',
                 'provider_reference' => $providerReference,
                 'reason' => $reason,
-                'metadata' => ['source' => 'admin_manual'],
+                'metadata' => array_merge(['source' => $returnRequestId ? 'return_request' : 'admin_manual'], $metadata),
             ])->save();
 
             $this->audit->log(

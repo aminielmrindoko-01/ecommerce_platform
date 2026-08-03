@@ -54,6 +54,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        \Illuminate\Support\Facades\Route::bind('return', function (string $value) {
+            return \App\Models\ReturnRequest::query()->whereKey($value)->firstOrFail();
+        });
+
         Blade::if('canPermission', function (string $permission): bool {
             $user = auth()->user();
 

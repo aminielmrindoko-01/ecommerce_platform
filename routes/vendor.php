@@ -35,4 +35,14 @@ Route::middleware(['auth', 'vendor'])->prefix('vendor')->name('vendor.')->group(
     Route::post('/finance/payout', [\App\Http\Controllers\Vendor\FinanceController::class, 'requestPayout'])
         ->middleware('throttle:10,1')
         ->name('finance.payout');
+
+    Route::get('/returns', [\App\Http\Controllers\Vendor\ReturnController::class, 'index'])->name('returns.index');
+    Route::get('/returns/{return}', [\App\Http\Controllers\Vendor\ReturnController::class, 'show'])->name('returns.show');
+    Route::post('/returns/{return}/approve', [\App\Http\Controllers\Vendor\ReturnController::class, 'approve'])->name('returns.approve');
+    Route::post('/returns/{return}/reject', [\App\Http\Controllers\Vendor\ReturnController::class, 'reject'])->name('returns.reject');
+    Route::post('/returns/{return}/receive', [\App\Http\Controllers\Vendor\ReturnController::class, 'receive'])->name('returns.receive');
+
+    Route::get('/disputes', [\App\Http\Controllers\Vendor\DisputeController::class, 'index'])->name('disputes.index');
+    Route::get('/disputes/{dispute}', [\App\Http\Controllers\Vendor\DisputeController::class, 'show'])->name('disputes.show');
+    Route::post('/disputes/{dispute}/respond', [\App\Http\Controllers\Vendor\DisputeController::class, 'respond'])->name('disputes.respond');
 });

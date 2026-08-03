@@ -98,6 +98,16 @@ Do **not** introduce a second authorization system. Extend this stack.
 | `/admin/finance/payouts/{id}/approve` | POST | admin | `payouts.approve` | **stepup** | `PAYOUT_APPROVED` |
 | `/admin/finance/payouts/{id}/process` | POST | admin | `payouts.process` | **stepup** | `PAYOUT_COMPLETED` |
 | `/vendor/finance` | GET | vendor | own finance | — | — |
+| `/admin/operations/returns` | GET | admin | `returns.view` | — | — |
+| `/admin/operations/returns/{id}/refund` | POST | admin | `refunds.create` | **stepup** | `RETURN_REFUNDED` |
+| `/admin/operations/disputes` | GET | admin | `disputes.view` | — | — |
+| `/admin/operations/chargebacks` | POST | admin | `chargebacks.create` | **stepup** | `CHARGEBACK_RECEIVED` |
+| `/admin/operations/holds/{id}/release` | POST | admin | `settlement_holds.manage` | **stepup** | `SETTLEMENT_HOLD_RELEASED` |
+| `/admin/operations/commission` | POST | admin | `commission.manage` | **stepup** | `COMMISSION_CONFIG_UPDATED` |
+| `/account/returns` | GET/POST | auth | own returns | — | `RETURN_*` |
+| `/account/disputes` | GET/POST | auth | own disputes | — | `DISPUTE_*` |
+| `/vendor/returns` | GET/POST | vendor | own store returns | — | `RETURN_*` |
+| `/vendor/disputes` | GET/POST | vendor | own store disputes | — | — |
 | `/admin/orders/…/fulfillment` | PATCH | admin | `orders.update` | — | fulfillment |
 | `/admin/users` | GET | admin | `users.view` | — | — |
 | `/admin/users/{id}` | PUT | admin | `users.update` | **stepup** | `USER_ROLE_CHANGED` |

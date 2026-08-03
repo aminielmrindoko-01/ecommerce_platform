@@ -118,6 +118,66 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
         ->middleware(['permission:payouts.process', 'stepup'])
         ->name('finance.payouts.process');
 
+    // Marketplace operations (Phase 7)
+    Route::get('/operations/returns', [\App\Http\Controllers\Admin\OperationsController::class, 'returns'])
+        ->middleware('permission:returns.view')
+        ->name('operations.returns');
+    Route::get('/operations/returns/{return}', [\App\Http\Controllers\Admin\OperationsController::class, 'showReturn'])
+        ->middleware('permission:returns.view')
+        ->name('operations.returns.show');
+    Route::post('/operations/returns/{return}/approve', [\App\Http\Controllers\Admin\OperationsController::class, 'approveReturn'])
+        ->middleware('permission:returns.approve,returns.manage')
+        ->name('operations.returns.approve');
+    Route::post('/operations/returns/{return}/reject', [\App\Http\Controllers\Admin\OperationsController::class, 'rejectReturn'])
+        ->middleware('permission:returns.approve,returns.manage')
+        ->name('operations.returns.reject');
+    Route::post('/operations/returns/{return}/receive', [\App\Http\Controllers\Admin\OperationsController::class, 'receiveReturn'])
+        ->middleware('permission:returns.manage,returns.approve')
+        ->name('operations.returns.receive');
+    Route::post('/operations/returns/{return}/refund', [\App\Http\Controllers\Admin\OperationsController::class, 'refundReturn'])
+        ->middleware(['permission:refunds.create', 'stepup'])
+        ->name('operations.returns.refund');
+
+    Route::get('/operations/disputes', [\App\Http\Controllers\Admin\OperationsController::class, 'disputes'])
+        ->middleware('permission:disputes.view')
+        ->name('operations.disputes');
+    Route::get('/operations/disputes/{dispute}', [\App\Http\Controllers\Admin\OperationsController::class, 'showDispute'])
+        ->middleware('permission:disputes.view')
+        ->name('operations.disputes.show');
+    Route::post('/operations/disputes/{dispute}/resolve', [\App\Http\Controllers\Admin\OperationsController::class, 'resolveDispute'])
+        ->middleware('permission:disputes.resolve,disputes.manage')
+        ->name('operations.disputes.resolve');
+    Route::post('/operations/disputes/{dispute}/respond', [\App\Http\Controllers\Admin\OperationsController::class, 'respondDispute'])
+        ->middleware('permission:disputes.respond,disputes.manage')
+        ->name('operations.disputes.respond');
+
+    Route::get('/operations/chargebacks', [\App\Http\Controllers\Admin\OperationsController::class, 'chargebacks'])
+        ->middleware('permission:chargebacks.view')
+        ->name('operations.chargebacks');
+    Route::post('/operations/chargebacks', [\App\Http\Controllers\Admin\OperationsController::class, 'storeChargeback'])
+        ->middleware(['permission:chargebacks.create,chargebacks.manage', 'stepup'])
+        ->name('operations.chargebacks.store');
+    Route::post('/operations/chargebacks/{chargeback}/status', [\App\Http\Controllers\Admin\OperationsController::class, 'updateChargeback'])
+        ->middleware(['permission:chargebacks.resolve,chargebacks.manage', 'stepup'])
+        ->name('operations.chargebacks.status');
+
+    Route::get('/operations/holds', [\App\Http\Controllers\Admin\OperationsController::class, 'holds'])
+        ->middleware('permission:settlement_holds.view')
+        ->name('operations.holds');
+    Route::post('/operations/holds/{hold}/release', [\App\Http\Controllers\Admin\OperationsController::class, 'releaseHold'])
+        ->middleware(['permission:settlement_holds.manage', 'stepup'])
+        ->name('operations.holds.release');
+
+    Route::get('/operations/commission', [\App\Http\Controllers\Admin\OperationsController::class, 'commission'])
+        ->middleware('permission:commission.manage,finance.reports.view')
+        ->name('operations.commission');
+    Route::post('/operations/commission', [\App\Http\Controllers\Admin\OperationsController::class, 'updateCommission'])
+        ->middleware(['permission:commission.manage', 'stepup'])
+        ->name('operations.commission.update');
+    Route::post('/operations/vendors/{vendor}/financial-status', [\App\Http\Controllers\Admin\OperationsController::class, 'setVendorFinancialStatus'])
+        ->middleware(['permission:vendors.suspend,payouts.process', 'stepup'])
+        ->name('operations.vendors.financial-status');
+
     // Categories
     Route::get('/categories', [AdminCategoryController::class, 'index'])
         ->middleware('permission:categories.view')

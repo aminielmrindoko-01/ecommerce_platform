@@ -80,6 +80,22 @@ Route::middleware('auth')->group(function () {
     Route::post('/account/orders/{order}/cancel', [AccountController::class, 'cancelOrder'])->name('account.orders.cancel');
     Route::get('/account/payments', [AccountController::class, 'payments'])->name('account.payments');
 
+    Route::get('/account/returns', [\App\Http\Controllers\Account\ReturnController::class, 'index'])->name('account.returns.index');
+    Route::get('/account/returns/{return}', [\App\Http\Controllers\Account\ReturnController::class, 'show'])->name('account.returns.show');
+    Route::get('/account/orders/{order}/items/{item}/return', [\App\Http\Controllers\Account\ReturnController::class, 'create'])->name('account.returns.create');
+    Route::post('/account/orders/{order}/items/{item}/return', [\App\Http\Controllers\Account\ReturnController::class, 'store'])
+        ->middleware('throttle:10,1')
+        ->name('account.returns.store');
+    Route::post('/account/returns/{return}/cancel', [\App\Http\Controllers\Account\ReturnController::class, 'cancel'])->name('account.returns.cancel');
+
+    Route::get('/account/disputes', [\App\Http\Controllers\Account\DisputeController::class, 'index'])->name('account.disputes.index');
+    Route::get('/account/disputes/{dispute}', [\App\Http\Controllers\Account\DisputeController::class, 'show'])->name('account.disputes.show');
+    Route::get('/account/orders/{order}/dispute', [\App\Http\Controllers\Account\DisputeController::class, 'create'])->name('account.disputes.create');
+    Route::post('/account/orders/{order}/dispute', [\App\Http\Controllers\Account\DisputeController::class, 'store'])
+        ->middleware('throttle:10,1')
+        ->name('account.disputes.store');
+    Route::post('/account/disputes/{dispute}/respond', [\App\Http\Controllers\Account\DisputeController::class, 'respond'])->name('account.disputes.respond');
+
     Route::get('/vendor/apply', [\App\Http\Controllers\VendorApplicationController::class, 'create'])->name('vendor.apply');
     Route::post('/vendor/apply', [\App\Http\Controllers\VendorApplicationController::class, 'store'])
         ->middleware('throttle:5,1')

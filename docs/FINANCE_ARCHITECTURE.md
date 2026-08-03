@@ -169,7 +169,42 @@ Never commit provider secrets.
 
 ---
 
-## 13. Status banner
+## 13. Chargeback reversals (Phase 7)
+
+Chargebacks are **not** customer refunds. Internal cases (`ChargebackService`) post compensating journals on `lost` / `accepted`:
+
+```
+DR VENDOR_PAYABLE (remaining net)
+DR PLATFORM_REVENUE (remaining commission)
+DR/CR REFUND_LIABILITY (balancing residual)
+CR PLATFORM_CASH (chargeback amount)
+```
+
+Idempotency key: `chargeback-reversal:{id}`. History is never rewritten.
+
+**CHARGEBACK INTEGRATION:** INTERNAL ARCHITECTURE / NOT PROVIDER-CONNECTED
+
+## 14. Settlement holds (Phase 7)
+
+- Time-based: `vendor_entitlements.available_at` (`FINANCE_SETTLEMENT_HOLD_HOURS`)
+- Event-based: `settlement_holds` for returns / disputes / chargebacks / manual
+- Available payable subtracts both; dispute/chargeback/manual holds also hard-block payout requests
+- See `docs/MARKETPLACE_OPERATIONS.md`
+
+## 15. Commission configuration (Phase 7)
+
+- Live rules: `commission_configs` (platform default, optional vendor override) via `CommissionConfigService`
+- Fallback: `config/finance.php`
+- Entitlements store immutable snapshots — changing config never recalculates history
+- Requires `commission.manage` + step-up
+
+## 16. Financial restrictions
+
+`vendors.financial_status`: `active` | `payout_hold` | `financial_review` | `suspended`  
+Only `active` (+ approved sell status) may request payouts.
+
+## 17. Status banner
 
 **PAYMENT INTEGRATION STATUS:** SANDBOX / NOT PRODUCTION-READY (Phase 5)  
-**PAYOUT INTEGRATION STATUS:** SANDBOX / NOT PRODUCTION-READY (Phase 6)
+**PAYOUT INTEGRATION STATUS:** SANDBOX / NOT PRODUCTION-READY (Phase 6)  
+**CHARGEBACK INTEGRATION:** INTERNAL ARCHITECTURE / NOT PROVIDER-CONNECTED (Phase 7)

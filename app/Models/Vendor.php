@@ -28,6 +28,14 @@ class Vendor extends Model
 
     public const STATUS_INACTIVE = 'inactive';
 
+    public const FINANCIAL_ACTIVE = 'active';
+
+    public const FINANCIAL_PAYOUT_HOLD = 'payout_hold';
+
+    public const FINANCIAL_REVIEW = 'financial_review';
+
+    public const FINANCIAL_SUSPENDED = 'suspended';
+
     /**
      * Mass-assignable store profile fields.
      * Ownership and trust fields are set only by trusted server/admin logic.
@@ -40,7 +48,7 @@ class Vendor extends Model
         'email',
         'logo',
         'location',
-        // Not fillable: user_id, is_verified, status, rating_avg, reviewed_*
+        // Not fillable: user_id, is_verified, status, financial_status, rating_avg, reviewed_*
     ];
 
     /**
@@ -83,5 +91,19 @@ class Vendor extends Model
     public function canSell(): bool
     {
         return $this->isApproved();
+    }
+
+    public function financialStatus(): string
+    {
+        return $this->financial_status ?: self::FINANCIAL_ACTIVE;
+    }
+
+    public function canRequestPayout(): bool
+    {
+        if (! $this->canSell()) {
+            return false;
+        }
+
+        return in_array($this->financialStatus(), [self::FINANCIAL_ACTIVE], true);
     }
 }

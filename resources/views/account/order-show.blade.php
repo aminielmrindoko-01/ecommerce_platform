@@ -87,8 +87,17 @@
                         @endforeach
                     </ol>
                 @endif
+                @if($status === 'delivered')
+                    <div style="margin-top:.75rem;display:flex;gap:.5rem;flex-wrap:wrap;">
+                        <a class="btn btn-ghost" href="{{ route('account.returns.create', [$order, $item]) }}">Request return</a>
+                    </div>
+                @endif
             </div>
         @endforeach
     </div>
 @endforeach
+
+<div class="panel" style="margin-top:1rem;">
+    <a class="btn btn-ghost" href="{{ route('account.disputes.create', $order) }}">Open dispute</a>
+</div>
 @endsection

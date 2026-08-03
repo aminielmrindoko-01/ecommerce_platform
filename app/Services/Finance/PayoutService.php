@@ -61,6 +61,12 @@ class PayoutService
             throw new InvalidArgumentException('Vendor is not approved for payouts.');
         }
 
+        if (! $vendor->canRequestPayout()) {
+            throw new InvalidArgumentException(
+                'Vendor financial status does not allow payouts ('.$vendor->financialStatus().').'
+            );
+        }
+
         $amount = $this->payments->normalizeMoney($amount);
         if (bccomp($amount, '0.00', 2) <= 0) {
             throw new InvalidArgumentException('Payout amount must be greater than zero.');
@@ -88,9 +94,21 @@ class PayoutService
             }
 
             // Lock vendor row to serialize concurrent payout requests.
-            Vendor::query()->whereKey($vendor->id)->lockForUpdate()->firstOrFail();
+            /** @var Vendor $lockedVendor */
+            $lockedVendor = Vendor::query()->whereKey($vendor->id)->lockForUpdate()->firstOrFail();
 
-            $available = $this->payables->availableBalance($vendor->fresh());
+            if (! $lockedVendor->canRequestPayout()) {
+                throw new InvalidArgumentException('Vendor financial status does not allow payouts.');
+            }
+
+            if (app(\App\Services\Operations\SettlementHoldService::class)
+                ->vendorHasBlockingHold((int) $lockedVendor->id)) {
+                throw new InvalidArgumentException(
+                    'Vendor has an active financial hold (return/dispute/chargeback).'
+                );
+            }
+
+            $available = $this->payables->availableBalance($lockedVendor->fresh());
             if (bccomp($amount, $available, 2) > 0) {
                 throw new InvalidArgumentException(
                     "Insufficient payable balance. Available: {$available} {$currency}."
