@@ -17,7 +17,7 @@ class Vendor extends Model
 {
     /**
      * Mass-assignable store profile fields.
-     * user_id is set only by trusted server/seeder logic.
+     * Ownership and trust fields are set only by trusted server/admin logic.
      *
      * @var list<string>
      */
@@ -27,8 +27,7 @@ class Vendor extends Model
         'email',
         'logo',
         'location',
-        'is_verified',
-        'rating_avg',
+        // Not fillable: user_id, is_verified, rating_avg
     ];
 
     /**

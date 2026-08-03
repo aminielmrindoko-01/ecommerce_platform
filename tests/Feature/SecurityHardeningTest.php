@@ -118,8 +118,7 @@ class SecurityHardeningTest extends TestCase
     {
         $a = $this->assign(User::factory()->create(), 'customer', 'customer');
         $b = $this->assign(User::factory()->create(), 'customer', 'customer');
-        $address = Address::create([
-            'user_id' => $b->id,
+        $address = new Address([
             'label' => 'Home',
             'full_name' => 'B',
             'phone' => '+255700000011',
@@ -128,6 +127,8 @@ class SecurityHardeningTest extends TestCase
             'region' => 'DSM',
             'is_default' => true,
         ]);
+        $address->user_id = $b->id;
+        $address->save();
 
         $this->actingAs($a)->delete(route('account.addresses.destroy', $address))->assertForbidden();
         $this->assertDatabaseHas('addresses', ['id' => $address->id, 'user_id' => $b->id]);

@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * High-signal security events (failed auth, privilege attempts, etc.).
+ * Append-only — ordinary admins must not mutate or delete rows.
  */
 class SecurityEvent extends Model
 {
@@ -22,6 +23,17 @@ class SecurityEvent extends Model
         'context',
         'created_at',
     ];
+
+    protected static function booted(): void
+    {
+        static::updating(function () {
+            throw new \RuntimeException('Security events are immutable.');
+        });
+
+        static::deleting(function () {
+            throw new \RuntimeException('Security events are immutable.');
+        });
+    }
 
     protected function casts(): array
     {

@@ -15,7 +15,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class Address extends Model
 {
     protected $fillable = [
-        'user_id',
         'label',
         'full_name',
         'phone',
@@ -26,6 +25,7 @@ class Address extends Model
         'postal_code',
         'country',
         'is_default',
+        // user_id is assigned server-side only
     ];
 
     /**

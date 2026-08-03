@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Security;
 
 use App\Http\Controllers\Controller;
+use App\Services\Authorization\AuditLogger;
 use App\Services\Security\MfaService;
 use App\Services\Security\StepUpAuthService;
 use Illuminate\Http\RedirectResponse;
@@ -40,6 +41,15 @@ class MfaController extends Controller
         auth()->login($user, (bool) $request->session()->pull('mfa.remember', false));
         $request->session()->forget('mfa.pending_user_id');
         $request->session()->regenerate();
+
+        app(AuditLogger::class)->log(
+            action: 'LOGIN_SUCCESS',
+            actor: $user,
+            resourceType: 'user',
+            resourceId: $user->id,
+            category: 'security',
+            newValues: ['via' => 'mfa_challenge'],
+        );
 
         if ($user->isAdmin()) {
             return redirect()->route('admin.dashboard');

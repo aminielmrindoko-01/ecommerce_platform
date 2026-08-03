@@ -80,8 +80,7 @@ class RbacAuthorizationTest extends TestCase
         $customer = $this->assignRole(User::factory()->create(), 'customer', 'customer');
         $other = $this->assignRole(User::factory()->create(), 'customer', 'customer');
 
-        $address = Address::create([
-            'user_id' => $other->id,
+        $address = new Address([
             'label' => 'Home',
             'full_name' => 'Other',
             'phone' => '+255700000010',
@@ -90,6 +89,8 @@ class RbacAuthorizationTest extends TestCase
             'region' => 'DSM',
             'is_default' => true,
         ]);
+        $address->user_id = $other->id;
+        $address->save();
 
         $this->actingAs($customer)
             ->delete(route('account.addresses.destroy', $address))

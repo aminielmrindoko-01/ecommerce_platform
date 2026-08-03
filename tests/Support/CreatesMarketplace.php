@@ -20,14 +20,18 @@ trait CreatesMarketplace
     {
         $user = User::factory()->vendor()->create($userOverrides);
 
-        $vendor = Vendor::create(array_merge([
+        $vendor = new Vendor(array_merge([
             'store_name' => 'Store '.$user->id,
             'email' => 'store'.$user->id.'@example.com',
-            'is_verified' => true,
-        ], $vendorOverrides));
-
-        $vendor->user_id = $user->id;
-        $vendor->save();
+        ], collect($vendorOverrides)->except(['is_verified', 'rating_avg', 'user_id'])->all()));
+        $trust = [
+            'user_id' => $user->id,
+            'is_verified' => (bool) ($vendorOverrides['is_verified'] ?? true),
+        ];
+        if (array_key_exists('rating_avg', $vendorOverrides)) {
+            $trust['rating_avg'] = $vendorOverrides['rating_avg'];
+        }
+        $vendor->forceFill($trust)->save();
 
         return [$user->fresh(), $vendor->fresh()];
     }
