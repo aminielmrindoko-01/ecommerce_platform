@@ -119,6 +119,8 @@ class AuditLogger
         $blocked = [
             'password', 'password_confirmation', 'token', 'access_token',
             'consumer_secret', 'consumer_key', 'authorization', 'remember_token',
+            'mfa_secret', 'mfa_recovery_codes', 'secret', 'otpauth_uri',
+            'recovery_codes', 'totp', 'api_key', 'private_key',
         ];
 
         $clean = [];

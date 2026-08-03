@@ -41,7 +41,8 @@ class RequireStepUpMiddleware
             abort(403, 'Recent authentication required for this action.');
         }
 
-        $request->session()->put('step_up.intended', $request->fullUrl());
+        // Store a same-origin relative path only (never trust Host/absolute URLs).
+        $request->session()->put('step_up.intended', $request->getRequestUri());
 
         return redirect()->route('security.step-up');
     }

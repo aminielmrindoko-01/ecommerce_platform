@@ -130,12 +130,13 @@ class AccountController extends Controller
             Address::where('user_id', auth()->id())->update(['is_default' => false]);
         }
 
-        Address::create([
+        $address = new Address([
             ...$data,
-            'user_id' => auth()->id(),
             'country' => 'Tanzania',
             'is_default' => (bool) ($data['is_default'] ?? false),
         ]);
+        $address->user_id = auth()->id();
+        $address->save();
 
         return back()->with('success', 'Address saved.');
     }

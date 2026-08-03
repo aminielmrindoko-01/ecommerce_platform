@@ -50,7 +50,15 @@ class MarketplaceSeeder extends Seeder
             ['store_name' => 'Home Essentials', 'email' => 'homeessentials@sana.com', 'description' => 'Modern furniture for every room', 'location' => 'Mwanza', 'is_verified' => true, 'rating_avg' => 4.5, 'logo' => 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=200&q=80'],
             ['store_name' => 'Beauty & Wellness', 'email' => 'beauty@sana.com', 'description' => 'Clean beauty and self-care', 'location' => 'Dodoma', 'is_verified' => false, 'rating_avg' => 4.4, 'logo' => 'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?auto=format&fit=crop&w=200&q=80'],
             ['store_name' => 'Apple Authorized', 'email' => 'apple@sana.com', 'description' => 'Genuine Apple products & accessories', 'location' => 'Dar es Salaam', 'is_verified' => true, 'rating_avg' => 4.9, 'logo' => 'https://images.unsplash.com/photo-1611186871348-b1ce696e52c9?auto=format&fit=crop&w=200&q=80'],
-        ])->map(fn ($v) => Vendor::create($v))->keyBy('store_name');
+        ])->map(function ($v) {
+            $vendor = new Vendor(collect($v)->except(['is_verified', 'rating_avg'])->all());
+            $vendor->forceFill([
+                'is_verified' => (bool) $v['is_verified'],
+                'rating_avg' => $v['rating_avg'],
+            ])->save();
+
+            return $vendor;
+        })->keyBy('store_name');
 
         // Link demo seller account to Tech Haven (1:1 ownership). user_id is not fillable.
         $seller = User::where('email', 'seller@example.com')->first();
