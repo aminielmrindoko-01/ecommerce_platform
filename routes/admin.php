@@ -6,6 +6,9 @@
  * Auth + admin.access required for the shell; each module adds permission middleware.
  */
 
+use App\Http\Controllers\Admin\CategoryController as AdminCategoryController;
+use App\Http\Controllers\Admin\InventoryController as AdminInventoryController;
+use App\Http\Controllers\Admin\ProductController as AdminProductController;
 use App\Http\Controllers\AdminController;
 use Illuminate\Support\Facades\Route;
 
@@ -14,10 +17,32 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
         ->middleware('permission:dashboard.view')
         ->name('dashboard');
 
-    Route::middleware('permission:products.view')->group(function () {
-        Route::get('/products', [AdminController::class, 'products'])->name('products');
-    });
-    Route::delete('/products/{id}', [AdminController::class, 'destroyProduct'])
+    // Products — static paths before {product}
+    Route::get('/products', [AdminProductController::class, 'index'])
+        ->middleware('permission:products.view')
+        ->name('products.index');
+    Route::get('/products/create', [AdminProductController::class, 'create'])
+        ->middleware('permission:products.create')
+        ->name('products.create');
+    Route::post('/products', [AdminProductController::class, 'store'])
+        ->middleware('permission:products.create')
+        ->name('products.store');
+    Route::get('/products/{product}', [AdminProductController::class, 'show'])
+        ->middleware('permission:products.view')
+        ->name('products.show');
+    Route::get('/products/{product}/edit', [AdminProductController::class, 'edit'])
+        ->middleware('permission:products.update')
+        ->name('products.edit');
+    Route::put('/products/{product}', [AdminProductController::class, 'update'])
+        ->middleware('permission:products.update')
+        ->name('products.update');
+    Route::post('/products/{product}/publish', [AdminProductController::class, 'publish'])
+        ->middleware('permission:products.publish')
+        ->name('products.publish');
+    Route::post('/products/{product}/unpublish', [AdminProductController::class, 'unpublish'])
+        ->middleware('permission:products.unpublish')
+        ->name('products.unpublish');
+    Route::delete('/products/{product}', [AdminProductController::class, 'destroy'])
         ->middleware('permission:products.delete')
         ->name('products.destroy');
 
@@ -48,9 +73,26 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
         ->middleware('permission:orders.update')
         ->name('orders.items.fulfillment');
 
-    Route::get('/categories', [AdminController::class, 'categories'])
+    // Categories
+    Route::get('/categories', [AdminCategoryController::class, 'index'])
         ->middleware('permission:categories.view')
-        ->name('categories');
+        ->name('categories.index');
+    Route::get('/categories/create', [AdminCategoryController::class, 'create'])
+        ->middleware('permission:categories.create')
+        ->name('categories.create');
+    Route::post('/categories', [AdminCategoryController::class, 'store'])
+        ->middleware('permission:categories.create')
+        ->name('categories.store');
+    Route::get('/categories/{category}/edit', [AdminCategoryController::class, 'edit'])
+        ->middleware('permission:categories.update')
+        ->name('categories.edit');
+    Route::put('/categories/{category}', [AdminCategoryController::class, 'update'])
+        ->middleware('permission:categories.update')
+        ->name('categories.update');
+    Route::delete('/categories/{category}', [AdminCategoryController::class, 'destroy'])
+        ->middleware('permission:categories.delete')
+        ->name('categories.destroy');
+
     Route::get('/coupons', [AdminController::class, 'coupons'])
         ->middleware('permission:coupons.view')
         ->name('coupons');
@@ -62,9 +104,16 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
         ->middleware('permission:reviews.moderate')
         ->name('reviews.moderate');
 
-    Route::get('/inventory', [AdminController::class, 'inventory'])
+    // Inventory
+    Route::get('/inventory', [AdminInventoryController::class, 'index'])
         ->middleware('permission:inventory.view')
-        ->name('inventory');
+        ->name('inventory.index');
+    Route::get('/inventory/history', [AdminInventoryController::class, 'history'])
+        ->middleware('permission:inventory.history')
+        ->name('inventory.history');
+    Route::post('/inventory/{product}/adjust', [AdminInventoryController::class, 'adjust'])
+        ->middleware('permission:inventory.adjust')
+        ->name('inventory.adjust');
 
     Route::get('/audit-logs', [AdminController::class, 'auditLogs'])
         ->middleware('permission:audit_logs.view')

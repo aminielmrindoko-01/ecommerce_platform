@@ -249,7 +249,9 @@ class SecurityHardeningTest extends TestCase
         // UI would hide Roles — backend must still deny.
         $this->actingAs($mod)->get(route('admin.roles'))->assertForbidden();
         $this->actingAs($mod)->get(route('admin.users'))->assertForbidden();
-        $this->actingAs($mod)->delete('/admin/products/1')->assertForbidden();
+        [, $store] = $this->createVendorUser();
+        $product = $this->createProductForVendor($store);
+        $this->actingAs($mod)->delete('/admin/products/'.$product->id)->assertForbidden();
     }
 
     public function test_cross_customer_order_put_patch_denied(): void

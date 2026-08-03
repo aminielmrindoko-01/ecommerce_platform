@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Product;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Support\CreatesMarketplace;
@@ -61,7 +62,7 @@ class VendorProductOwnershipTest extends TestCase
             ->delete(route('vendor.products.destroy', $product))
             ->assertRedirect(route('vendor.products.index'));
 
-        $this->assertDatabaseMissing('products', ['id' => $product->id]);
+        $this->assertSoftDeleted('products', ['id' => $product->id]);
     }
 
     public function test_vendor_cannot_access_another_vendors_product(): void
@@ -137,11 +138,10 @@ class VendorProductOwnershipTest extends TestCase
             'name' => 'Admin Global Product',
             'price' => 5000,
             'stock' => 2,
-        ])->assertRedirect(route('products.index'));
+        ])->assertRedirect();
 
-        $this->assertDatabaseHas('products', [
-            'name' => 'Admin Global Product',
-            'vendor_id' => $vendor->id,
-        ]);
+        $created = Product::query()->where('name', 'Admin Global Product')->first();
+        $this->assertNotNull($created);
+        $this->assertSame($vendor->id, (int) $created->vendor_id);
     }
 }

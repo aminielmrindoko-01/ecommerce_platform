@@ -16,9 +16,14 @@
     <div class="admin-stat"><span>Orders</span><strong>{{ $totalOrders }}</strong></div>
     <div class="admin-stat"><span>Pending</span><strong>{{ $pendingOrders }}</strong></div>
     <div class="admin-stat"><span>Products</span><strong>{{ $totalProducts }}</strong></div>
+    <div class="admin-stat"><span>Published</span><strong>{{ $activeProducts }}</strong></div>
+    <div class="admin-stat"><span>Pending review</span><strong>{{ $pendingProducts }}</strong></div>
+    <div class="admin-stat"><span>Categories</span><strong>{{ $totalCategories }}</strong></div>
+    <div class="admin-stat"><span>Customers</span><strong>{{ $totalCustomers }}</strong></div>
     <div class="admin-stat"><span>Users</span><strong>{{ $totalUsers }}</strong></div>
     <div class="admin-stat"><span>Vendors</span><strong>{{ $totalVendors }}</strong></div>
     <div class="admin-stat"><span>Low stock</span><strong>{{ $lowStock }}</strong></div>
+    <div class="admin-stat"><span>Out of stock</span><strong>{{ $outOfStock }}</strong></div>
     <div class="admin-stat"><span>Avg rating</span><strong>{{ $avgRating }}</strong></div>
 </div>
 

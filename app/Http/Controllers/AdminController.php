@@ -45,8 +45,12 @@ class AdminController extends Controller
     {
         $totalUsers = User::count();
         $totalProducts = Product::count();
+        $activeProducts = Product::query()->where('status', Product::STATUS_PUBLISHED)->count();
+        $pendingProducts = Product::query()->where('status', Product::STATUS_PENDING_REVIEW)->count();
+        $totalCategories = Category::count();
         $totalVendors = Vendor::count();
         $totalOrders = Order::count();
+        $totalCustomers = User::query()->where('role', 'customer')->count();
 
         $revenue = Order::whereIn('status', [
             'paid',
@@ -55,7 +59,11 @@ class AdminController extends Controller
         ])->sum('total_price');
 
         $pendingOrders = Order::where('status', 'pending')->count();
-        $lowStock = Product::where('stock', '<', 10)->count();
+        $lowStock = Product::query()
+            ->where('stock', '>', 0)
+            ->whereColumn('stock', '<=', 'reorder_level')
+            ->count();
+        $outOfStock = Product::query()->where('stock', '<=', 0)->count();
         $avgRating = round((float) Product::avg('rating_avg'), 2);
 
         $recentProducts = Product::with('vendor')->latest()->take(5)->get();
@@ -86,11 +94,16 @@ class AdminController extends Controller
         return view('admin.dashboard', compact(
             'totalUsers',
             'totalProducts',
+            'activeProducts',
+            'pendingProducts',
+            'totalCategories',
+            'totalCustomers',
             'totalVendors',
             'totalOrders',
             'revenue',
             'pendingOrders',
             'lowStock',
+            'outOfStock',
             'avgRating',
             'recentProducts',
             'recentOrders',
@@ -98,34 +111,6 @@ class AdminController extends Controller
             'chartLabels',
             'chartData'
         ));
-    }
-
-    public function products(): View
-    {
-        $products = Product::with(['vendor', 'category'])
-            ->latest()
-            ->paginate(20);
-
-        return view('admin.products', compact('products'));
-    }
-
-    public function destroyProduct($id): RedirectResponse
-    {
-        $product = Product::findOrFail($id);
-        $this->authorize('delete', $product);
-
-        $product->delete();
-
-        $this->audit->log(
-            action: 'PRODUCT_DELETED',
-            actor: auth()->user(),
-            resourceType: 'product',
-            resourceId: $id,
-        );
-
-        return redirect()
-            ->route('admin.products')
-            ->with('success', 'Product removed successfully.');
     }
 
     public function vendors(): View
@@ -349,15 +334,6 @@ class AdminController extends Controller
         return back()->with('success', 'Item fulfillment updated.');
     }
 
-    public function categories(): View
-    {
-        $categories = Category::withCount('products')
-            ->orderBy('sort_order')
-            ->get();
-
-        return view('admin.categories', compact('categories'));
-    }
-
     public function coupons(): View
     {
         $coupons = Coupon::latest()->get();
@@ -414,15 +390,6 @@ class AdminController extends Controller
         );
 
         return back()->with('success', 'Review moderation updated.');
-    }
-
-    public function inventory(): View
-    {
-        $products = Product::with('vendor')
-            ->orderBy('stock')
-            ->paginate(25);
-
-        return view('admin.inventory', compact('products'));
     }
 
     public function auditLogs(): View

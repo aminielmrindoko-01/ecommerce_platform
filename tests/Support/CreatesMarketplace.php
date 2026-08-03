@@ -53,12 +53,17 @@ trait CreatesMarketplace
             'name' => 'Test Product',
             'slug' => 'test-product-'.uniqid(),
             'price' => 10000,
-            'stock' => 10,
             'description' => 'Test product',
-        ], $overrides));
+        ], collect($overrides)->except(['stock', 'status', 'vendor_id', 'reorder_level', 'reserved_quantity'])->all()));
 
         $product->vendor_id = $vendor->id;
-        $product->save();
+        $product->forceFill([
+            'stock' => (int) ($overrides['stock'] ?? 10),
+            'status' => $overrides['status'] ?? Product::STATUS_PUBLISHED,
+            'published_at' => now(),
+            'reorder_level' => (int) ($overrides['reorder_level'] ?? 5),
+            'reserved_quantity' => (int) ($overrides['reserved_quantity'] ?? 0),
+        ])->save();
 
         return $product->fresh();
     }
