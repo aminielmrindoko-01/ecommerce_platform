@@ -140,13 +140,23 @@ class AdminController extends Controller
     public function toggleVendorVerification($id): RedirectResponse
     {
         $vendor = Vendor::findOrFail($id);
+        $actor = auth()->user();
         $before = (bool) $vendor->is_verified;
-        $vendor->is_verified = ! $vendor->is_verified;
+        $willApprove = ! $before;
+
+        // Middleware ORs approve|suspend for route entry; enforce direction here.
+        if ($willApprove) {
+            abort_unless($actor?->hasPermission('vendors.approve'), 403);
+        } else {
+            abort_unless($actor?->hasPermission('vendors.suspend'), 403);
+        }
+
+        $vendor->is_verified = $willApprove;
         $vendor->save();
 
         $this->audit->log(
             action: $vendor->is_verified ? 'VENDOR_APPROVED' : 'VENDOR_SUSPENDED',
-            actor: auth()->user(),
+            actor: $actor,
             resourceType: 'vendor',
             resourceId: $vendor->id,
             oldValues: ['is_verified' => $before],

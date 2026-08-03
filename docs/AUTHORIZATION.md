@@ -247,6 +247,24 @@ Never authorize from request payload identity fields.
 
 ---
 
+## 20. Definition of Done — Security
+
+Every new protected SANA Market feature **must** ship with all of the following before merge:
+
+1. **Authentication** — route behind `auth` (or documented public exception)
+2. **Permission** — granular `permission:…` / policy check (not bare `admin.access` alone for mutations)
+3. **Ownership / resource authorization** — tenant isolation for vendor/customer resources; never trust client identity fields
+4. **Input validation** — FormRequest / allowlisted fields; sensitive columns not mass-assignable
+5. **Business authorization** — state-machine / domain rules after ACL
+6. **Audit logging** — sensitive mutations emit audit (and security events on abuse)
+7. **Security tests** — feature/HTTP tests covering allow **and** deny (including IDOR/BOLA and privilege escalation where relevant)
+
+Frontend permission checks are **UX only**. Backend denial is mandatory even when UI hides the action.
+
+Step-up (`stepup`) is required for: privileged role changes, MFA disable, and future payment-config / payout / Super-Admin creation routes when those modules exist.
+
+---
+
 ## Least-privilege notes (recommendations only)
 
 Do **not** change these without product sign-off:

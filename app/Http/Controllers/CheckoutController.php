@@ -245,8 +245,7 @@ class CheckoutController extends Controller
                 $total = max(0, $subtotal - $discount + $shipping + $tax);
 
                 if ($data['save_address'] ?? false) {
-                    Address::create([
-                        'user_id' => auth()->id(),
+                    $address = new Address([
                         'label' => 'Checkout',
                         'full_name' => $data['full_name'],
                         'phone' => $data['phone'],
@@ -257,6 +256,8 @@ class CheckoutController extends Controller
                         'country' => 'Tanzania',
                         'is_default' => ! auth()->user()->addresses()->exists(),
                     ]);
+                    $address->user_id = auth()->id();
+                    $address->save();
                 }
 
                 $order = Order::create([
