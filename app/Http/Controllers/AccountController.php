@@ -65,6 +65,7 @@ class AccountController extends Controller
         PaymentService $payments
     ): View {
         abort_unless($order->user_id === auth()->id(), 403);
+        $this->authorize('view', $order);
         $order->load(['items.product.vendor', 'latestPaymentTransaction']);
 
         $itemsByVendor = $order->items
@@ -145,6 +146,7 @@ class AccountController extends Controller
     public function destroyAddress(Address $address): RedirectResponse
     {
         abort_unless($address->user_id === auth()->id(), 403);
+        $this->authorize('delete', $address);
         $address->delete();
 
         return back()->with('success', 'Address removed.');

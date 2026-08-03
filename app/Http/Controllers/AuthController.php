@@ -11,10 +11,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Services\Authorization\AuditLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\View\View;
 
 /**
@@ -46,6 +46,29 @@ class AuthController extends Controller
             $request->session()->regenerate();
 
             $user = Auth::user();
+
+            if ($user && ! $user->isActiveAccount()) {
+                Auth::logout();
+                $request->session()->invalidate();
+                $request->session()->regenerateToken();
+                app(AuditLogger::class)->security('LOGIN_FAILED', $user, 'medium', [
+                    'reason' => 'inactive_account',
+                    'email' => $credentials['email'],
+                ]);
+
+                return back()->withErrors([
+                    'email' => 'This account is inactive.',
+                ]);
+            }
+
+            app(AuditLogger::class)->log(
+                action: 'LOGIN_SUCCESS',
+                actor: $user,
+                resourceType: 'user',
+                resourceId: $user?->id,
+                category: 'security',
+            );
+
             if ($user && $user->isAdmin()) {
                 return redirect()->route('admin.dashboard');
             }
@@ -56,6 +79,10 @@ class AuthController extends Controller
 
             return redirect()->intended(route('home'));
         }
+
+        app(AuditLogger::class)->security('LOGIN_FAILED', null, 'low', [
+            'email' => $credentials['email'],
+        ]);
 
         return back()->withErrors([
             'email' => 'Invalid login details',
@@ -81,12 +108,12 @@ class AuthController extends Controller
             'password' => 'required|string|min:8|confirmed',
         ]);
 
-        User::create([
+        $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
-            'password' => Hash::make($request->password),
-            'role' => 'customer',
+            'password' => $request->password,
         ]);
+        $user->forceFill(['role' => 'customer', 'is_active' => true])->save();
 
         return redirect('/login')
             ->with('success', 'Account created successfully. Please login.');

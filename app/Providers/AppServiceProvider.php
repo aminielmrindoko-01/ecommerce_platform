@@ -3,10 +3,12 @@
 namespace App\Providers;
 
 use App\Contracts\PaymentGatewayInterface;
+use App\Services\Authorization\PermissionResolver;
 use App\Services\PaymentGatewayManager;
 use App\Support\Payments\PesapalClient;
 use App\Support\Payments\PesapalGateway;
 use App\Support\Payments\StubPaymentGateway;
+use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\ServiceProvider;
 
 /**
@@ -30,6 +32,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(StubPaymentGateway::class);
         $this->app->singleton(PesapalClient::class);
         $this->app->singleton(PesapalGateway::class);
+        $this->app->singleton(PermissionResolver::class);
 
         // Default binding resolves through the manager (stub / coming-soon unless configured).
         $this->app->bind(PaymentGatewayInterface::class, function ($app) {
@@ -42,6 +45,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        Blade::if('canPermission', function (string $permission): bool {
+            $user = auth()->user();
+
+            return $user !== null && $user->hasPermission($permission);
+        });
     }
 }

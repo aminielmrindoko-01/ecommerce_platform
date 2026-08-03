@@ -24,32 +24,30 @@ class DatabaseSeeder extends Seeder
             [
                 'name' => 'Admin User',
                 'password' => 'password',
-                'role' => 'admin',
                 'phone' => '+255700000001',
             ]
-        );
+        )->forceFill(['role' => 'admin', 'is_active' => true])->save();
 
         User::updateOrCreate(
             ['email' => 'test@example.com'],
             [
                 'name' => 'Test User',
                 'password' => 'password',
-                'role' => 'customer',
                 'phone' => '+255700000002',
             ]
-        );
+        )->forceFill(['role' => 'customer', 'is_active' => true])->save();
 
         User::updateOrCreate(
             ['email' => 'seller@example.com'],
             [
                 'name' => 'Seller Demo',
                 'password' => 'password',
-                'role' => 'vendor',
                 'phone' => '+255700000003',
             ]
-        );
+        )->forceFill(['role' => 'vendor', 'is_active' => true])->save();
 
         $this->call([
+            RbacSeeder::class,
             MarketplaceSeeder::class,
         ]);
     }

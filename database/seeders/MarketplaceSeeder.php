@@ -66,10 +66,10 @@ class MarketplaceSeeder extends Seeder
             [
                 'name' => 'Fashion Seller',
                 'password' => 'password',
-                'role' => 'vendor',
                 'phone' => '+255700000004',
             ]
         );
+        $fashionSeller->forceFill(['role' => 'vendor', 'is_active' => true])->save();
         $fashionPlus = $vendors['Fashion Plus'];
         $fashionPlus->user_id = $fashionSeller->id;
         $fashionPlus->save();
