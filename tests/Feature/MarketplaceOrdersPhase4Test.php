@@ -127,10 +127,11 @@ class MarketplaceOrdersPhase4Test extends TestCase
                 'price' => 1,
                 'subtotal' => 1,
                 'total' => 1,
+                'status' => 'delivered',
+                'payment_status' => 'paid',
                 'vendor_id' => $vendorB->id,
                 'user_id' => 999999,
                 'customer_id' => 999999,
-                'status' => 'delivered',
             ])
             ->assertStatus(422);
 
@@ -150,6 +151,12 @@ class MarketplaceOrdersPhase4Test extends TestCase
                 'payment_method' => 'cod',
                 'shipping_method' => 'pickup',
                 'checkout_token' => app(CheckoutIdempotencyService::class)->issue($customer->id),
+                // Price/status tampering is ignored; identity fields are rejected above.
+                'price' => 1,
+                'subtotal' => 1,
+                'total' => 1,
+                'status' => 'delivered',
+                'payment_status' => 'paid',
             ])
             ->assertRedirect();
 

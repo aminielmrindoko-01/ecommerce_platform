@@ -45,9 +45,30 @@ return new class extends Migration
             DB::statement("ALTER TABLE orders MODIFY status VARCHAR(32) NOT NULL DEFAULT 'pending'");
         } elseif ($driver === 'pgsql') {
             DB::statement('ALTER TABLE orders ALTER COLUMN status TYPE VARCHAR(32)');
-        }
-        // sqlite: enum already behaves as string
+        } elseif ($driver === 'sqlite') {
+            // SQLite enum() is a CHECK constraint — rebuild orders.status as free string.
+            Schema::table('orders', function (Blueprint $table) {
+                if (! Schema::hasColumn('orders', 'status_expanded')) {
+                    $table->string('status_expanded', 32)->default('pending');
+                }
+            });
 
+            DB::table('orders')->orderBy('id')->chunkById(100, function ($rows) {
+                foreach ($rows as $row) {
+                    DB::table('orders')->where('id', $row->id)->update([
+                        'status_expanded' => $row->status ?: 'pending',
+                    ]);
+                }
+            });
+
+            Schema::table('orders', function (Blueprint $table) {
+                $table->dropColumn('status');
+            });
+
+            Schema::table('orders', function (Blueprint $table) {
+                $table->renameColumn('status_expanded', 'status');
+            });
+        }
         Schema::table('order_items', function (Blueprint $table) {
             if (! Schema::hasColumn('order_items', 'vendor_id')) {
                 $table->foreignId('vendor_id')->nullable()->after('product_id')

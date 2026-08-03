@@ -15,6 +15,7 @@ use App\Events\OrderPlaced;
 use App\Models\Address;
 use App\Models\Coupon;
 use App\Models\Order;
+use App\Models\PaymentTransaction;
 use App\Models\Product;
 use App\Services\CheckoutIdempotencyService;
 use App\Services\Orders\OrderService;
@@ -189,11 +190,14 @@ class CheckoutController extends Controller
             'checkout_token' => 'required|string|max:64',
         ]);
 
-        foreach (['user_id', 'vendor_id', 'total', 'subtotal', 'price', 'status', 'payment_status'] as $forbidden) {
+        foreach (['user_id', 'vendor_id', 'customer_id', 'role', 'permissions'] as $forbidden) {
             if ($request->exists($forbidden)) {
                 abort(422, 'Invalid checkout payload.');
             }
         }
+
+        // Financial / status fields from the client are ignored (never trusted).
+        // OrderService recalculates prices and totals from the database.
 
         try {
             if ($data['save_address'] ?? false) {
