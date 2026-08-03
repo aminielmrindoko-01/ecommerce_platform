@@ -2,18 +2,18 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Services\Authorization\PermissionResolver;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
 /**
- * Authenticatable marketplace user (customer, vendor, or admin via `role`).
+ * Authenticatable marketplace user.
  *
- * Password is cast as hashed. Role helpers power admin gates and UI chrome.
- *
- * @package App\Models
+ * Legacy `users.role` remains for marketplace identity (customer/vendor/admin).
+ * Granular authorization is resolved via RBAC roles/permissions.
  */
 class User extends Authenticatable
 {
@@ -21,8 +21,6 @@ class User extends Authenticatable
     use HasFactory, Notifiable;
 
     /**
-     * The attributes that are mass assignable.
-     *
      * @var list<string>
      */
     protected $fillable = [
@@ -31,12 +29,11 @@ class User extends Authenticatable
         'phone',
         'avatar',
         'password',
-        'role',
+        // `role` intentionally excluded from mass assignment (privilege escalation).
+        'is_active',
     ];
 
     /**
-     * Vendor store owned by this user (at most one).
-     *
      * @return \Illuminate\Database\Eloquent\Relations\HasOne<\App\Models\Vendor, $this>
      */
     public function vendor()
@@ -68,33 +65,76 @@ class User extends Authenticatable
         return $this->hasMany(Wishlist::class);
     }
 
+    public function roles(): BelongsToMany
+    {
+        return $this->belongsToMany(Role::class, 'user_roles')->withTimestamps();
+    }
+
     /**
-     * Whether this user may access admin routes (role === admin).
+     * Permission check (deny by default via PermissionResolver).
+     */
+    public function hasPermission(string $permission): bool
+    {
+        return app(PermissionResolver::class)->has($this, $permission);
+    }
+
+    public function hasAnyPermission(string ...$permissions): bool
+    {
+        return app(PermissionResolver::class)->hasAny($this, $permissions);
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function permissionNames(): array
+    {
+        return app(PermissionResolver::class)->permissionsFor($this);
+    }
+
+    public function isActiveAccount(): bool
+    {
+        return $this->is_active !== false;
+    }
+
+    /**
+     * Platform admin shell access (permission-based, legacy-compatible).
      */
     public function isAdmin(): bool
     {
-        return $this->role === 'admin';
+        return $this->isActiveAccount() && (
+            $this->hasPermission('admin.access')
+            || $this->role === 'admin'
+        );
     }
 
     /**
-     * Whether this user is flagged as a vendor account.
+     * Marketplace vendor account flag (legacy role column).
      */
     public function isVendor(): bool
     {
-        return $this->role === 'vendor';
+        return $this->isActiveAccount() && $this->role === 'vendor';
     }
 
-    /**
-     * Whether this vendor user has an linked store record for ownership checks.
-     */
     public function hasVendorStore(): bool
     {
         return $this->isVendor() && $this->vendor()->exists();
     }
 
+    public function isSuperAdmin(): bool
+    {
+        if (! $this->isActiveAccount()) {
+            return false;
+        }
+
+        if ($this->roles()->where('name', 'super_admin')->exists()) {
+            return true;
+        }
+
+        // Legacy bridge before RBAC rows exist.
+        return $this->role === 'admin' && ! $this->roles()->exists();
+    }
+
     /**
-     * The attributes that should be hidden for serialization.
-     *
      * @var list<string>
      */
     protected $hidden = [
@@ -103,8 +143,6 @@ class User extends Authenticatable
     ];
 
     /**
-     * Get the attributes that should be cast.
-     *
      * @return array<string, string>
      */
     protected function casts(): array
@@ -112,6 +150,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'is_active' => 'boolean',
         ];
     }
 }

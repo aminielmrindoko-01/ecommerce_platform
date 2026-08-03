@@ -15,22 +15,23 @@ use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Restricts access to users with role=vendor and an owned Vendor record.
- *
- * @package App\Http\Middleware
+ * Restricts access to vendor accounts with a linked store + vendor.access.
  */
 class VendorMiddleware
 {
     /**
-     * Abort unless the user is a vendor with a store for ownership checks.
-     *
      * @param  Closure(Request): (Response)  $next
      */
     public function handle(Request $request, Closure $next): Response
     {
         $user = $request->user();
 
-        if (! $user || ! $user->isVendor() || ! $user->vendor) {
+        if (! $user || ! $user->isActiveAccount()) {
+            abort(403, 'Unauthorized vendor access');
+        }
+
+        // Marketplace identity + capability + ownership anchor (store).
+        if ($user->role !== 'vendor' || ! $user->hasPermission('vendor.access') || ! $user->vendor) {
             abort(403, 'Unauthorized vendor access');
         }
 

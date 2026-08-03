@@ -6,13 +6,17 @@ use App\Models\PaymentTransaction;
 use App\Models\User;
 
 /**
- * Authorization for payment transaction visibility and admin mutation.
+ * Payment visibility / admin mutation — vendors never manage payments.
  */
 class PaymentTransactionPolicy
 {
     public function view(User $user, PaymentTransaction $paymentTransaction): bool
     {
-        if ($user->isAdmin()) {
+        if (! $user->isActiveAccount()) {
+            return false;
+        }
+
+        if ($user->hasPermission('payments.view') || $user->hasPermission('payments.manage')) {
             return true;
         }
 
@@ -24,11 +28,11 @@ class PaymentTransactionPolicy
 
     public function update(User $user, PaymentTransaction $paymentTransaction): bool
     {
-        return $user->isAdmin();
+        return $user->isActiveAccount() && $user->hasPermission('payments.manage');
     }
 
     public function manage(User $user): bool
     {
-        return $user->isAdmin();
+        return $user->isActiveAccount() && $user->hasPermission('payments.manage');
     }
 }

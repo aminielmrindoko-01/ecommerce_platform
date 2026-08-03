@@ -296,6 +296,26 @@ Do not treat HTTP-fake tests as real sandbox E2E success.
 * Duplicate IPNs idempotent
 * Secrets never in Blade, JS, logs, DB records, tests, or git
 
+## Phase 8C — PesaPal Sandbox Integration
+
+See README section **PesaPal Sandbox Integration** above.
+
+## Authorization & RBAC
+
+See [docs/AUTHORIZATION.md](docs/AUTHORIZATION.md) for the enterprise RBAC guide:
+
+* Permission naming (`resource.action`)
+* Role → permission maps
+* Ownership / IDOR rules
+* Admin permission middleware
+* Audit / security events
+* How to protect new routes
+
+```bash
+php artisan db:seed --class=RbacSeeder
+php artisan test --filter=RbacAuthorizationTest
+```
+
 ## Technology Stack
 
 * PHP 8.2+

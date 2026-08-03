@@ -31,11 +31,11 @@ Route::post('/product/{id}/reviews', [ProductController::class, 'storeReview'])-
 Route::post('/product/{id}/questions', [ProductController::class, 'storeQuestion'])->middleware('throttle:10,1')->name('products.questions.store');
 
 Route::middleware(['auth', 'admin'])->group(function () {
-    Route::get('/products/create', [ProductController::class, 'create'])->name('products.create');
-    Route::post('/products', [ProductController::class, 'store'])->name('products.store');
-    Route::get('/products/{id}/edit', [ProductController::class, 'edit'])->name('products.edit');
-    Route::put('/products/{id}', [ProductController::class, 'update'])->name('products.update');
-    Route::delete('/products/{id}', [ProductController::class, 'destroy'])->name('products.destroy');
+    Route::get('/products/create', [ProductController::class, 'create'])->middleware('permission:products.create')->name('products.create');
+    Route::post('/products', [ProductController::class, 'store'])->middleware('permission:products.create')->name('products.store');
+    Route::get('/products/{id}/edit', [ProductController::class, 'edit'])->middleware('permission:products.update')->name('products.edit');
+    Route::put('/products/{id}', [ProductController::class, 'update'])->middleware('permission:products.update')->name('products.update');
+    Route::delete('/products/{id}', [ProductController::class, 'destroy'])->middleware('permission:products.delete')->name('products.destroy');
 });
 
 Route::get('/cart', [CartController::class, 'index'])->name('cart.index');

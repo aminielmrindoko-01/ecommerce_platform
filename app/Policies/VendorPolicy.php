@@ -6,47 +6,50 @@ use App\Models\User;
 use App\Models\Vendor;
 
 /**
- * Authorization for vendor store profile management.
- *
- * Admins may manage any vendor; vendors may manage only their own store.
+ * Vendor store authorization: permission + ownership.
  */
 class VendorPolicy
 {
-    /**
-     * Admin may view any vendor; a vendor may view their own store.
-     */
     public function view(User $user, Vendor $vendor): bool
     {
-        return $user->isAdmin() || $this->owns($user, $vendor);
+        if (! $user->isActiveAccount()) {
+            return false;
+        }
+
+        if ($user->hasPermission('vendors.view')) {
+            return true;
+        }
+
+        return $this->owns($user, $vendor);
     }
 
-    /**
-     * Only admins create vendor stores (seeders/admin flows).
-     */
     public function create(User $user): bool
     {
-        return $user->isAdmin();
+        return $user->isActiveAccount() && $user->hasPermission('vendors.create');
     }
 
-    /**
-     * Vendor may update own profile; admin may update any.
-     */
     public function update(User $user, Vendor $vendor): bool
     {
-        return $user->isAdmin() || $this->owns($user, $vendor);
+        if (! $user->isActiveAccount()) {
+            return false;
+        }
+
+        if ($user->hasPermission('vendors.update') && $user->hasPermission('vendors.view')) {
+            // Platform vendor managers / admins
+            if ($user->hasPermission('vendors.approve') || $user->hasPermission('vendors.suspend') || $user->hasPermission('admin.access')) {
+                return true;
+            }
+        }
+
+        // Vendor self-profile via profile.update + ownership
+        return $user->hasPermission('profile.update') && $this->owns($user, $vendor);
     }
 
-    /**
-     * Only admins delete vendor stores.
-     */
     public function delete(User $user, Vendor $vendor): bool
     {
-        return $user->isAdmin();
+        return $user->isActiveAccount() && $user->hasPermission('vendors.suspend');
     }
 
-    /**
-     * Whether the user owns this vendor store.
-     */
     protected function owns(User $user, Vendor $vendor): bool
     {
         return $user->isVendor()
