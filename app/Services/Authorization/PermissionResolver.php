@@ -2,7 +2,6 @@
 
 namespace App\Services\Authorization;
 
-use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Support\Facades\Cache;
@@ -11,10 +10,13 @@ use Illuminate\Support\Facades\Schema;
 /**
  * Central permission resolver (deny by default).
  *
- * Resolution order:
- * 1. Inactive users → no permissions
- * 2. Assigned RBAC roles → union of role permissions (* expands to catalog)
- * 3. Legacy users.role bridge when no RBAC roles assigned yet
+ * Priority:
+ * 1. Inactive → deny
+ * 2. Materialize missing user_roles from legacy users.role (once)
+ * 3. RBAC roles → permissions ONLY
+ * 4. No roles → deny (fail closed)
+ *
+ * users.role never widens permissions beyond assigned RBAC roles.
  */
 class PermissionResolver
 {
@@ -27,11 +29,12 @@ class PermissionResolver
             return $this->requestCache[$user->id];
         }
 
-        if (! $this->tablesReady()) {
-            return $this->requestCache[$user->id] = $this->legacyPermissions($user);
+        if ($user->is_active === false) {
+            return $this->requestCache[$user->id] = [];
         }
 
-        if ($user->is_active === false) {
+        if (! $this->tablesReady()) {
+            // Mid-migration fail-closed for elevated access; customers get none via empty.
             return $this->requestCache[$user->id] = [];
         }
 
@@ -44,7 +47,19 @@ class PermissionResolver
         $roleNames = $user->roles()->pluck('name')->all();
 
         if ($roleNames === []) {
-            $permissions = $this->legacyPermissions($user);
+            $this->materializeLegacyRole($user);
+            $roleNames = $user->roles()->pluck('name')->all();
+        }
+
+        if ($roleNames === []) {
+            // If the RBAC catalog has not been seeded yet, allow a config-only
+            // bridge for local/test bootstraps. Once roles exist in DB, missing
+            // user_roles fail closed (legacy users.role cannot grant access).
+            if (! Role::query()->exists()) {
+                $permissions = $this->configBridgePermissions($user);
+            } else {
+                $permissions = [];
+            }
         } else {
             $permissions = $this->expandRolePermissions($roleNames);
         }
@@ -52,18 +67,14 @@ class PermissionResolver
         $permissions = array_values(array_unique($permissions));
         sort($permissions);
 
-        Cache::put($cacheKey, $permissions, now()->addMinutes(10));
+        Cache::put($cacheKey, $permissions, now()->addMinutes(5));
 
         return $this->requestCache[$user->id] = $permissions;
     }
 
     public function has(User $user, string $permission): bool
     {
-        if ($permission === '') {
-            return false;
-        }
-
-        if ($user->is_active === false) {
+        if ($permission === '' || $user->is_active === false) {
             return false;
         }
 
@@ -93,6 +104,41 @@ class PermissionResolver
     }
 
     /**
+     * Attach mapped RBAC role from legacy users.role when user_roles is empty.
+     * Does not grant permissions directly — only creates RBAC rows.
+     */
+    public function materializeLegacyRole(User $user): void
+    {
+        if (! $this->tablesReady() || $user->roles()->exists()) {
+            return;
+        }
+
+        $legacy = (string) ($user->role ?? 'customer');
+        $mapped = (string) (config('authorization.legacy_role_map.'.$legacy) ?? 'customer');
+        $role = Role::query()->where('name', $mapped)->first();
+
+        if (! $role) {
+            return;
+        }
+
+        $user->roles()->syncWithoutDetaching([$role->id]);
+        $this->forget($user);
+    }
+
+    /**
+     * Config-only bridge used exclusively when the roles table has zero rows.
+     *
+     * @return list<string>
+     */
+    protected function configBridgePermissions(User $user): array
+    {
+        $legacy = (string) ($user->role ?? 'customer');
+        $mapped = (string) (config('authorization.legacy_role_map.'.$legacy) ?? 'customer');
+
+        return $this->expandRolePermissions([$mapped]);
+    }
+
+    /**
      * @param  list<string>  $roleNames
      * @return list<string>
      */
@@ -105,7 +151,6 @@ class PermissionResolver
         foreach ($roleNames as $name) {
             $map = $maps[$name] ?? null;
             if ($map === null) {
-                // DB-only custom role: load from role_permissions
                 $role = Role::query()->where('name', $name)->with('permissions')->first();
                 if ($role) {
                     foreach ($role->permissions as $permission) {
@@ -126,26 +171,6 @@ class PermissionResolver
         }
 
         return $resolved;
-    }
-
-    /**
-     * @return list<string>
-     */
-    protected function legacyPermissions(User $user): array
-    {
-        if ($user->is_active === false) {
-            return [];
-        }
-
-        $legacy = (string) ($user->role ?? 'customer');
-        $mapped = (string) (config('authorization.legacy_role_map.'.$legacy) ?? 'customer');
-        $map = (array) (config('authorization.roles.'.$mapped) ?? []);
-
-        if ($map === ['*'] || (count($map) === 1 && ($map[0] ?? null) === '*')) {
-            return array_values((array) config('authorization.permissions', []));
-        }
-
-        return array_values($map);
     }
 
     protected function cacheKey(int $userId): string

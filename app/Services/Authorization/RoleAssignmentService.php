@@ -127,8 +127,7 @@ class RoleAssignmentService
 
     protected function actorIsSuperAdmin(User $actor): bool
     {
-        return $actor->roles()->where('name', 'super_admin')->exists()
-            || (($actor->role === 'admin') && ! $actor->roles()->exists());
+        return in_array('super_admin', $actor->roleNames(), true);
     }
 
     protected function targetIsLastSuperAdmin(User $target): bool

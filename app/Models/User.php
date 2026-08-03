@@ -12,8 +12,8 @@ use Illuminate\Notifications\Notifiable;
 /**
  * Authenticatable marketplace user.
  *
- * Legacy `users.role` remains for marketplace identity (customer/vendor/admin).
- * Granular authorization is resolved via RBAC roles/permissions.
+ * `users.role` is marketplace identity (customer|vendor|admin) — NOT an
+ * authorization authority. Permissions come only from RBAC roles.
  */
 class User extends Authenticatable
 {
@@ -29,8 +29,7 @@ class User extends Authenticatable
         'phone',
         'avatar',
         'password',
-        // `role` intentionally excluded from mass assignment (privilege escalation).
-        'is_active',
+        // Sensitive authz fields intentionally excluded: role, mfa_*, is_active via admin only.
     ];
 
     /**
@@ -70,9 +69,6 @@ class User extends Authenticatable
         return $this->belongsToMany(Role::class, 'user_roles')->withTimestamps();
     }
 
-    /**
-     * Permission check (deny by default via PermissionResolver).
-     */
     public function hasPermission(string $permission): bool
     {
         return app(PermissionResolver::class)->has($this, $permission);
@@ -91,24 +87,29 @@ class User extends Authenticatable
         return app(PermissionResolver::class)->permissionsFor($this);
     }
 
+    /**
+     * @return list<string>
+     */
+    public function roleNames(): array
+    {
+        return $this->roles()->pluck('name')->all();
+    }
+
     public function isActiveAccount(): bool
     {
         return $this->is_active !== false;
     }
 
     /**
-     * Platform admin shell access (permission-based, legacy-compatible).
+     * Platform admin shell access — permission only (no users.role override).
      */
     public function isAdmin(): bool
     {
-        return $this->isActiveAccount() && (
-            $this->hasPermission('admin.access')
-            || $this->role === 'admin'
-        );
+        return $this->isActiveAccount() && $this->hasPermission('admin.access');
     }
 
     /**
-     * Marketplace vendor account flag (legacy role column).
+     * Marketplace vendor identity (account type column) + active.
      */
     public function isVendor(): bool
     {
@@ -122,16 +123,20 @@ class User extends Authenticatable
 
     public function isSuperAdmin(): bool
     {
-        if (! $this->isActiveAccount()) {
-            return false;
-        }
+        return $this->isActiveAccount()
+            && in_array('super_admin', $this->roleNames(), true);
+    }
 
-        if ($this->roles()->where('name', 'super_admin')->exists()) {
-            return true;
-        }
+    public function requiresMfaEnrollment(): bool
+    {
+        $required = (array) config('authorization.mfa.required_roles', []);
 
-        // Legacy bridge before RBAC rows exist.
-        return $this->role === 'admin' && ! $this->roles()->exists();
+        return count(array_intersect($this->roleNames(), $required)) > 0;
+    }
+
+    public function hasMfaEnabled(): bool
+    {
+        return (bool) $this->mfa_enabled && filled($this->mfa_secret);
     }
 
     /**
@@ -140,6 +145,8 @@ class User extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
+        'mfa_secret',
+        'mfa_recovery_codes',
     ];
 
     /**
@@ -151,6 +158,10 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_active' => 'boolean',
+            'mfa_enabled' => 'boolean',
+            'mfa_confirmed_at' => 'datetime',
+            'mfa_secret' => 'encrypted',
+            'mfa_recovery_codes' => 'encrypted:array',
         ];
     }
 }

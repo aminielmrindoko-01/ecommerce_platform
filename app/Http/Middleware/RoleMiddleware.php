@@ -1,13 +1,5 @@
 <?php
 
-/**
- * |--------------------------------------------------------------------------
- * | Role middleware
- * |--------------------------------------------------------------------------
- * | Restricts access to users whose `role` matches one of the given roles.
- * | Admin routes prefer the dedicated `admin` alias (AdminMiddleware).
- */
-
 namespace App\Http\Middleware;
 
 use Closure;
@@ -15,25 +7,40 @@ use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Role-parameterized authorization for route groups.
+ * Restrict by RBAC role names (not legacy users.role).
  *
- * @package App\Http\Middleware
+ * Prefer `permission:` middleware for new routes. This alias remains for
+ * rare role-membership checks and fail-closes when no match.
  */
 class RoleMiddleware
 {
     /**
-     * Abort unless the authenticated user has one of the allowed roles.
-     *
      * @param  Closure(Request): (Response)  $next
-     * @param  string  ...$roles
-     *
-     * @throws \Symfony\Component\HttpKernel\Exception\HttpException
      */
     public function handle(Request $request, Closure $next, string ...$roles): Response
     {
         $user = $request->user();
 
-        if (! $user || ($roles !== [] && ! in_array($user->role, $roles, true))) {
+        if (! $user || ! $user->isActiveAccount()) {
+            abort(403, 'Unauthorized access');
+        }
+
+        if ($roles === []) {
+            abort(403, 'Unauthorized access');
+        }
+
+        $needed = [];
+        foreach ($roles as $role) {
+            foreach (explode(',', $role) as $part) {
+                $part = trim($part);
+                if ($part !== '') {
+                    $needed[] = $part;
+                }
+            }
+        }
+
+        $assigned = $user->roleNames();
+        if (count(array_intersect($needed, $assigned)) === 0) {
             abort(403, 'Unauthorized access');
         }
 

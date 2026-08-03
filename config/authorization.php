@@ -228,11 +228,46 @@ return [
     |--------------------------------------------------------------------------
     | Legacy users.role → RBAC role bridge
     |--------------------------------------------------------------------------
+    |
+    | users.role is marketplace identity only. When a user has no user_roles
+    | rows, the resolver may MATERIALIZE the mapped RBAC role into user_roles
+    | (once). After that, ONLY RBAC roles grant permissions — users.role can
+    | never override or widen RBAC.
+    |
     */
     'legacy_role_map' => [
         'admin' => 'super_admin',
         'vendor' => 'vendor',
         'customer' => 'customer',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | MFA (TOTP) for privileged roles
+    |--------------------------------------------------------------------------
+    */
+    'mfa' => [
+        'issuer' => env('MFA_ISSUER', 'SANA Market'),
+        'required_roles' => [
+            'super_admin',
+            'admin',
+            'finance_manager',
+            'vendor_manager',
+        ],
+        // When true, privileged roles without MFA enrollment are blocked from admin shell.
+        'enforce_enrollment' => env('MFA_ENFORCE_ENROLLMENT', false),
+        'recovery_codes_count' => 8,
+        'window' => 1, // ±1 time-step tolerance
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Step-up authentication
+    |--------------------------------------------------------------------------
+    */
+    'step_up' => [
+        'ttl_seconds' => (int) env('STEP_UP_TTL_SECONDS', 300),
+        'password_confirmation_required' => true,
     ],
 
     /*

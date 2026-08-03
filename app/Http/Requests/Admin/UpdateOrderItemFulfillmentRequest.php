@@ -26,7 +26,7 @@ class UpdateOrderItemFulfillmentRequest extends FormRequest
             return false;
         }
 
-        return (bool) ($this->user()?->isAdmin() && $this->user()->can('updateFulfillment', $item));
+        return (bool) ($this->user()?->hasPermission('orders.update') && $this->user()->can('updateFulfillment', $item));
     }
 
     /**

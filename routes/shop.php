@@ -95,7 +95,19 @@ Route::middleware('auth')->group(function () {
     Route::get('/checkout', [CheckoutController::class, 'show'])->name('checkout');
     Route::post('/checkout', [CheckoutController::class, 'place'])->middleware('throttle:10,1')->name('checkout.place');
     Route::get('/checkout/confirmation/{order}', [CheckoutController::class, 'confirmation'])->name('checkout.confirmation');
+
+    Route::get('/security/mfa/enroll', [\App\Http\Controllers\Security\MfaController::class, 'enrollForm'])->name('security.mfa.enroll');
+    Route::post('/security/mfa/enroll', [\App\Http\Controllers\Security\MfaController::class, 'enrollConfirm'])->name('security.mfa.enroll.confirm');
+    Route::post('/security/mfa/disable', [\App\Http\Controllers\Security\MfaController::class, 'disable'])
+        ->name('security.mfa.disable');
+    Route::get('/security/step-up', [\App\Http\Controllers\Security\StepUpController::class, 'form'])->name('security.step-up');
+    Route::post('/security/step-up', [\App\Http\Controllers\Security\StepUpController::class, 'confirm'])->name('security.step-up.confirm');
 });
+
+Route::get('/security/mfa/challenge', [\App\Http\Controllers\Security\MfaController::class, 'challengeForm'])->name('security.mfa.challenge');
+Route::post('/security/mfa/challenge', [\App\Http\Controllers\Security\MfaController::class, 'challenge'])
+    ->middleware('throttle:10,1')
+    ->name('security.mfa.challenge.submit');
 
 /*
 |--------------------------------------------------------------------------
