@@ -15,7 +15,7 @@ class UpdateOrderPaymentRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return (bool) ($this->user()?->isAdmin() && $this->user()->can('manage', PaymentTransaction::class));
+        return (bool) ($this->user()?->hasPermission('payments.manage') && $this->user()->can('manage', PaymentTransaction::class));
     }
 
     /**

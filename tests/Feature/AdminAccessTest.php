@@ -51,9 +51,11 @@ class AdminAccessTest extends TestCase
         $admin = User::factory()->admin()->create();
         $target = User::factory()->create(['role' => 'customer']);
 
-        $response = $this->actingAs($admin)->put("/admin/users/{$target->id}", [
-            'role' => 'vendor',
-        ]);
+        $response = $this->actingAs($admin)
+            ->withSession(['auth.step_up_confirmed_at' => now()->timestamp])
+            ->put("/admin/users/{$target->id}", [
+                'role' => 'vendor',
+            ]);
 
         $response->assertRedirect();
         $this->assertSame('vendor', $target->fresh()->role);

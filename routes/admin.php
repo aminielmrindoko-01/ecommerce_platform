@@ -32,7 +32,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
         Route::get('/users', [AdminController::class, 'users'])->name('users');
     });
     Route::put('/users/{id}', [AdminController::class, 'updateUserRole'])
-        ->middleware('permission:users.update')
+        ->middleware(['permission:users.update', 'stepup'])
         ->name('users.update');
 
     Route::middleware('permission:orders.view')->group(function () {

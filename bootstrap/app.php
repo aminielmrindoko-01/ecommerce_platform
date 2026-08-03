@@ -31,6 +31,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'vendor' => VendorMiddleware::class,
             'role' => RoleMiddleware::class,
             'permission' => PermissionMiddleware::class,
+            'stepup' => \App\Http\Middleware\RequireStepUpMiddleware::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
