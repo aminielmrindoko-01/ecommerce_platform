@@ -30,6 +30,7 @@ class HomeController extends Controller
         $categories = Category::orderBy('sort_order')->get();
 
         $featured = Product::with(['vendor', 'category'])
+            ->published()
             ->featured()
             ->inStock()
             ->latest()
@@ -37,23 +38,27 @@ class HomeController extends Controller
             ->get();
 
         $flashSales = Product::with(['vendor', 'category'])
+            ->published()
             ->flashSale()
             ->inStock()
             ->take(8)
             ->get();
 
         $bestSellers = Product::with(['vendor', 'category'])
+            ->published()
             ->orderByDesc('sold_count')
             ->take(8)
             ->get();
 
         $newArrivals = Product::with(['vendor', 'category'])
+            ->published()
             ->where('is_new', true)
             ->latest()
             ->take(8)
             ->get();
 
         $trending = Product::with(['vendor', 'category'])
+            ->published()
             ->orderByDesc('rating_avg')
             ->orderByDesc('rating_count')
             ->take(8)

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Product;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Support\CreatesMarketplace;
@@ -85,7 +86,10 @@ class ProductAuthorizationTest extends TestCase
             'description' => 'Created by admin',
         ]);
 
-        $response->assertRedirect(route('products.index'));
+        $response->assertRedirect();
         $this->assertDatabaseHas('products', ['name' => 'Admin Created Product']);
+        $product = Product::query()->where('name', 'Admin Created Product')->first();
+        $this->assertNotNull($product);
+        $response->assertRedirect(route('admin.products.show', $product));
     }
 }

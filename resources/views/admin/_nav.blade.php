@@ -7,10 +7,10 @@
         <a class="chip {{ request()->routeIs('admin.dashboard') ? 'is-active' : '' }}" href="{{ route('admin.dashboard') }}">Dashboard</a>
     @endif
     @if($user?->hasPermission('products.view'))
-        <a class="chip {{ request()->routeIs('admin.products') ? 'is-active' : '' }}" href="{{ route('admin.products') }}">Products</a>
+        <a class="chip {{ request()->routeIs('admin.products.*') ? 'is-active' : '' }}" href="{{ route('admin.products.index') }}">Products</a>
     @endif
     @if($user?->hasPermission('inventory.view'))
-        <a class="chip {{ request()->routeIs('admin.inventory') ? 'is-active' : '' }}" href="{{ route('admin.inventory') }}">Inventory</a>
+        <a class="chip {{ request()->routeIs('admin.inventory.*') ? 'is-active' : '' }}" href="{{ route('admin.inventory.index') }}">Inventory</a>
     @endif
     @if($user?->hasPermission('orders.view'))
         <a class="chip {{ request()->routeIs('admin.orders') ? 'is-active' : '' }}" href="{{ route('admin.orders') }}">Orders</a>
@@ -22,7 +22,7 @@
         <a class="chip {{ request()->routeIs('admin.vendors') ? 'is-active' : '' }}" href="{{ route('admin.vendors') }}">Vendors</a>
     @endif
     @if($user?->hasPermission('categories.view'))
-        <a class="chip {{ request()->routeIs('admin.categories') ? 'is-active' : '' }}" href="{{ route('admin.categories') }}">Categories</a>
+        <a class="chip {{ request()->routeIs('admin.categories.*') ? 'is-active' : '' }}" href="{{ route('admin.categories.index') }}">Categories</a>
     @endif
     @if($user?->hasPermission('coupons.view'))
         <a class="chip {{ request()->routeIs('admin.coupons') ? 'is-active' : '' }}" href="{{ route('admin.coupons') }}">Coupons</a>

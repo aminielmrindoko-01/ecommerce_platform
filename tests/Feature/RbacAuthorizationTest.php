@@ -126,8 +126,8 @@ class RbacAuthorizationTest extends TestCase
     {
         $manager = $this->assignRole(User::factory()->create(), 'product_manager', 'admin');
 
-        $this->actingAs($manager)->get(route('admin.products'))->assertOk();
-        $this->actingAs($manager)->get(route('admin.categories'))->assertOk();
+        $this->actingAs($manager)->get(route('admin.products.index'))->assertOk();
+        $this->actingAs($manager)->get(route('admin.categories.index'))->assertOk();
         $this->actingAs($manager)->get(route('admin.roles'))->assertForbidden();
         $this->actingAs($manager)->get(route('admin.orders'))->assertForbidden();
         $this->assertFalse($manager->hasPermission('payments.manage'));
@@ -138,7 +138,7 @@ class RbacAuthorizationTest extends TestCase
     {
         $manager = $this->assignRole(User::factory()->create(), 'inventory_manager', 'admin');
 
-        $this->actingAs($manager)->get(route('admin.inventory'))->assertOk();
+        $this->actingAs($manager)->get(route('admin.inventory.index'))->assertOk();
         $this->actingAs($manager)->get(route('admin.users'))->assertForbidden();
         $this->actingAs($manager)->get(route('admin.roles'))->assertForbidden();
     }

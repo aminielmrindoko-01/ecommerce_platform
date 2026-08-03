@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -13,15 +14,29 @@ use Illuminate\Support\Str;
  *
  * Prices are TZS. Merchandising flags (featured / flash / new) drive homepage rails.
  * rating_avg and rating_count are denormalized from reviews for fast filtering/sort.
+ * `stock` is available quantity; lifecycle lives in `status`.
  *
  * @package App\Models
  */
 class Product extends Model
 {
+    use SoftDeletes;
+
+    public const STATUS_DRAFT = 'draft';
+
+    public const STATUS_PENDING_REVIEW = 'pending_review';
+
+    public const STATUS_PUBLISHED = 'published';
+
+    public const STATUS_UNPUBLISHED = 'unpublished';
+
+    public const STATUS_SUSPENDED = 'suspended';
+
+    public const STATUS_ARCHIVED = 'archived';
+
     /**
      * Mass-assignable catalog fields.
-     * Aggregates (rating_avg, rating_count, sold_count) are not fillable —
-     * they are updated only by review/checkout server logic.
+     * Aggregates and ownership are not fillable — set only by trusted services.
      *
      * @var list<string>
      */
@@ -32,7 +47,6 @@ class Product extends Model
         'brand',
         'price',
         'compare_at_price',
-        'stock',
         'is_featured',
         'is_flash_sale',
         'flash_ends_at',
@@ -43,6 +57,7 @@ class Product extends Model
         'specs',
         'variants',
         'sku',
+        // stock / status / reserved_quantity / reorder_level set via services
     ];
 
     /**
@@ -58,9 +73,12 @@ class Product extends Model
             'is_flash_sale' => 'boolean',
             'is_new' => 'boolean',
             'flash_ends_at' => 'datetime',
+            'published_at' => 'datetime',
             'gallery' => 'array',
             'specs' => 'array',
             'variants' => 'array',
+            'reorder_level' => 'integer',
+            'reserved_quantity' => 'integer',
         ];
     }
 
@@ -86,9 +104,38 @@ class Product extends Model
         return $this->belongsTo(Category::class);
     }
 
+    public function inventoryMovements(): HasMany
+    {
+        return $this->hasMany(InventoryMovement::class);
+    }
+
     public function reviews(): HasMany
     {
         return $this->hasMany(Review::class);
+    }
+
+    public function isPublished(): bool
+    {
+        return $this->status === self::STATUS_PUBLISHED;
+    }
+
+    public function isLowStock(): bool
+    {
+        return (int) $this->stock > 0 && (int) $this->stock <= (int) ($this->reorder_level ?? 0);
+    }
+
+    public function isOutOfStock(): bool
+    {
+        return (int) $this->stock <= 0;
+    }
+
+    /**
+     * @param  \Illuminate\Database\Eloquent\Builder<\App\Models\Product>  $query
+     * @return \Illuminate\Database\Eloquent\Builder<\App\Models\Product>
+     */
+    public function scopePublished($query)
+    {
+        return $query->where('status', self::STATUS_PUBLISHED);
     }
 
     public function questions(): HasMany

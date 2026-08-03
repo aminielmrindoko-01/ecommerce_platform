@@ -16,11 +16,11 @@ use App\Models\Product;
 use App\Models\ProductQuestion;
 use App\Models\Review;
 use App\Models\Vendor;
+use App\Services\Catalog\ProductCatalogService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 use Illuminate\View\View;
+use InvalidArgumentException;
 
 /**
  * Product listing, detail, CRUD, reviews, and Q&A.
@@ -29,6 +29,10 @@ use Illuminate\View\View;
  */
 class ProductController extends Controller
 {
+    public function __construct(
+        protected ProductCatalogService $catalog,
+    ) {}
+
     /**
      * Filtered/paginated catalog. Eager-loads vendor + category to avoid N+1 in cards.
      *
@@ -37,7 +41,7 @@ class ProductController extends Controller
      */
     public function index(Request $request): View
     {
-        $query = Product::with(['vendor', 'category']);
+        $query = Product::with(['vendor', 'category'])->published();
 
         if ($search = trim((string) $request->query('q', ''))) {
             $query->where(function ($q) use ($search) {
@@ -111,9 +115,11 @@ class ProductController extends Controller
     public function show($id): View
     {
         $product = Product::with(['vendor', 'category', 'reviews' => fn ($q) => $q->latest()->take(10), 'questions'])
+            ->published()
             ->findOrFail($id);
 
         $related = Product::with(['vendor', 'category'])
+            ->published()
             ->where('id', '!=', $product->id)
             ->when($product->category_id, fn ($q) => $q->where('category_id', $product->category_id))
             ->take(4)
@@ -150,20 +156,19 @@ class ProductController extends Controller
     {
         $this->authorize('create', Product::class);
 
-        $data = $request->only(['category_id', 'name', 'brand', 'price', 'stock', 'description']);
-        $data['slug'] = Str::slug($request->name).'-'.Str::random(5);
-
-        if ($request->hasFile('image')) {
-            $path = $request->file('image')->store('products', 'public');
-            $data['image'] = $path;
+        try {
+            $product = $this->catalog->create(
+                $request->safe()->all() + [
+                    'image' => $request->file('image'),
+                    'status' => 'published',
+                ],
+                $request->user(),
+            );
+        } catch (InvalidArgumentException $e) {
+            return back()->withInput()->withErrors(['product' => $e->getMessage()]);
         }
 
-        // vendor_id is not mass-assignable; admin selects the owning store explicitly.
-        $product = new Product($data);
-        $product->vendor_id = (int) $request->validated('vendor_id');
-        $product->save();
-
-        return redirect()->route('products.index')->with('success', 'Product created successfully');
+        return redirect()->route('admin.products.show', $product)->with('success', 'Product created successfully');
     }
 
     /**
@@ -183,9 +188,7 @@ class ProductController extends Controller
     }
 
     /**
-     * Update product fields; replace uploaded image and delete prior local file if any.
-     *
-     * Remote http(s) image URLs are not deleted from storage on replace.
+     * Update product fields via catalog service (audited).
      *
      * @param  int|string  $id
      */
@@ -194,24 +197,21 @@ class ProductController extends Controller
         $product = Product::findOrFail($id);
         $this->authorize('update', $product);
 
-        $product->fill($request->only(['category_id', 'name', 'brand', 'description', 'price', 'stock']));
-        // Admin may reassign store ownership; never taken from untrusted vendor forms.
-        $product->vendor_id = (int) $request->validated('vendor_id');
-
-        if ($request->hasFile('image')) {
-            if ($product->image && ! str_starts_with($product->image, 'http')) {
-                Storage::disk('public')->delete($product->image);
+        try {
+            $data = $request->safe()->all() + ['image' => $request->file('image')];
+            if (! $request->user()->hasPermission('inventory.adjust')) {
+                unset($data['stock']);
             }
-            $product->image = $request->file('image')->store('products', 'public');
+            $product = $this->catalog->update($product, $data, $request->user(), allowVendorIdChange: true);
+        } catch (InvalidArgumentException $e) {
+            return back()->withInput()->withErrors(['product' => $e->getMessage()]);
         }
 
-        $product->save();
-
-        return redirect()->route('products.show', $product->id)->with('success', 'Product updated successfully');
+        return redirect()->route('admin.products.show', $product)->with('success', 'Product updated successfully');
     }
 
     /**
-     * Soft-delete is not used — product row is removed.
+     * Archive (soft-delete) a product.
      *
      * @param  int|string  $id
      */
@@ -219,10 +219,9 @@ class ProductController extends Controller
     {
         $product = Product::findOrFail($id);
         $this->authorize('delete', $product);
+        $this->catalog->archive($product, request()->user());
 
-        $product->delete();
-
-        return redirect()->route('products.index')->with('success', 'Product deleted.');
+        return redirect()->route('admin.products.index')->with('success', 'Product archived.');
     }
 
     /**
