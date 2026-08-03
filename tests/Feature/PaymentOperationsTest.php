@@ -125,7 +125,7 @@ class PaymentOperationsTest extends TestCase
         $this->assertSame('paid', $tx->status);
         $this->assertSame('MANUAL-REF-1', $tx->provider_reference);
         $this->assertNotNull($tx->paid_at);
-        $this->assertSame('paid', $order->status);
+        $this->assertSame('confirmed', $order->status);
 
         $history = PaymentStatusHistory::where('payment_transaction_id', $tx->id)
             ->where('to_status', 'paid')

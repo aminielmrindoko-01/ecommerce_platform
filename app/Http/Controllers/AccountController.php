@@ -14,6 +14,7 @@ use App\Models\Address;
 use App\Models\Order;
 use App\Models\Wishlist;
 use App\Services\OrderFulfillmentSummary;
+use App\Services\Orders\OrderService;
 use App\Services\PaymentGatewayManager;
 use App\Services\PaymentService;
 use Illuminate\Http\RedirectResponse;
@@ -22,6 +23,7 @@ use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
+use InvalidArgumentException;
 
 /**
  * Authenticated customer account pages and mutations.
@@ -66,16 +68,18 @@ class AccountController extends Controller
     ): View {
         abort_unless($order->user_id === auth()->id(), 403);
         $this->authorize('view', $order);
-        $order->load(['items.product.vendor', 'latestPaymentTransaction']);
+        $order->load(['items.product.vendor', 'items.vendor', 'latestPaymentTransaction']);
 
         $itemsByVendor = $order->items
-            ->groupBy(fn ($item) => $item->product?->vendor_id ?? 0)
+            ->groupBy(fn ($item) => $item->owningVendorId() ?? 0)
             ->map(function ($items) {
-                $vendor = $items->first()?->product?->vendor;
+                $first = $items->first();
+                $vendor = $first?->vendor ?: $first?->product?->vendor;
 
                 return [
                     'vendor' => $vendor,
-                    'store_name' => $vendor?->store_name ?? 'Seller',
+                    'store_name' => $first?->vendor_store_name
+                        ?: ($vendor?->store_name ?? 'Seller'),
                     'items' => $items,
                 ];
             })
@@ -88,13 +92,39 @@ class AccountController extends Controller
             ?? $payments->ensurePendingTransaction($order, 'stub');
         $paymentInit = $gateways->initialize($order, $transaction)->toArray();
 
+        $canCancel = app(OrderService::class)->actorMayCancel($order, auth()->user());
+
         return view('account.order-show', compact(
             'order',
             'itemsByVendor',
             'fulfillmentSummary',
             'fulfillmentSummaryLabel',
-            'paymentInit'
+            'paymentInit',
+            'canCancel'
         ));
+    }
+
+    /**
+     * Customer cancel for own pending/confirmed orders (server-side rules).
+     */
+    public function cancelOrder(Request $request, Order $order, OrderService $orders): RedirectResponse
+    {
+        abort_unless($order->user_id === auth()->id(), 403);
+        $this->authorize('cancel', $order);
+
+        $data = $request->validate([
+            'reason' => 'nullable|string|max:500',
+        ]);
+
+        try {
+            $orders->cancel($order, $request->user(), $data['reason'] ?? null);
+        } catch (InvalidArgumentException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return redirect()
+            ->route('account.orders.show', $order)
+            ->with('success', 'Order cancelled.');
     }
 
     /**

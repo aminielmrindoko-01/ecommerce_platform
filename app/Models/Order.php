@@ -27,10 +27,25 @@ class Order extends Model
         'partially_refunded',
     ];
 
+    /** Marketplace fulfillment lifecycle (payment is separate). */
+    public const STATUSES = [
+        'pending',
+        'confirmed',
+        'processing',
+        'ready_for_fulfillment',
+        'shipped',
+        'delivered',
+        'completed',
+        'cancelled',
+        'refunded',
+        'paid', // legacy
+    ];
+
     protected $fillable = [
         'order_number',
         'user_id',
         'total_price',
+        'currency',
         'status',
         'payment_status',
         'payment_method',

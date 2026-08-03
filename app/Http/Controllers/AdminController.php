@@ -52,13 +52,9 @@ class AdminController extends Controller
         $totalOrders = Order::count();
         $totalCustomers = User::query()->where('role', 'customer')->count();
 
-        $revenue = Order::whereIn('status', [
-            'paid',
-            'shipped',
-            'completed',
-        ])->sum('total_price');
+        $revenue = Order::where('payment_status', 'paid')->sum('total_price');
 
-        $pendingOrders = Order::where('status', 'pending')->count();
+        $pendingOrders = Order::whereIn('status', ['pending', 'confirmed', 'paid'])->count();
         $lowStock = Product::query()
             ->where('stock', '>', 0)
             ->whereColumn('stock', '<=', 'reorder_level')
@@ -113,49 +109,26 @@ class AdminController extends Controller
         ));
     }
 
-    public function vendors(): View
-    {
-        $vendors = Vendor::withCount('products')
-            ->latest()
-            ->get();
-
-        return view('admin.vendors', compact('vendors'));
-    }
-
-    public function toggleVendorVerification($id): RedirectResponse
+    public function toggleVendorVerification($id, \App\Services\Vendors\VendorLifecycleService $lifecycle): RedirectResponse
     {
         $vendor = Vendor::findOrFail($id);
         $actor = auth()->user();
         $before = (bool) $vendor->is_verified;
         $willApprove = ! $before;
 
-        // Middleware ORs approve|suspend for route entry; enforce direction here.
         if ($willApprove) {
             abort_unless($actor?->hasPermission('vendors.approve'), 403);
+            $lifecycle->transition($vendor, 'approved', $actor);
         } else {
             abort_unless($actor?->hasPermission('vendors.suspend'), 403);
+            $lifecycle->transition($vendor, 'suspended', $actor);
         }
-
-        $vendor->is_verified = $willApprove;
-        $vendor->save();
-
-        $this->audit->log(
-            action: $vendor->is_verified ? 'VENDOR_APPROVED' : 'VENDOR_SUSPENDED',
-            actor: $actor,
-            resourceType: 'vendor',
-            resourceId: $vendor->id,
-            oldValues: ['is_verified' => $before],
-            newValues: ['is_verified' => $vendor->is_verified],
-            category: 'security',
-        );
 
         return redirect()
             ->route('admin.vendors')
             ->with(
                 'success',
-                $vendor->is_verified
-                    ? 'Vendor verified.'
-                    : 'Vendor verification removed.'
+                $willApprove ? 'Vendor verified.' : 'Vendor verification removed.'
             );
     }
 
@@ -203,22 +176,41 @@ class AdminController extends Controller
     }
 
     public function orders(
+        Request $request,
         OrderFulfillmentSummary $summary,
         OrderItemFulfillmentService $fulfillment,
         PaymentService $payments,
-        PaymentGatewayManager $gateways
+        PaymentGatewayManager $gateways,
+        \App\Services\Orders\OrderStateMachine $states,
     ): View {
-        $orders = Order::with([
+        $query = Order::with([
             'user',
             'items.product.vendor',
+            'items.vendor',
             'latestPaymentTransaction',
-        ])
-            ->latest()
-            ->paginate(20);
+        ]);
 
-        $orders->getCollection()->transform(function (Order $order) use ($summary, $fulfillment, $payments, $gateways) {
+        if ($status = $request->string('status')->toString()) {
+            $query->where('status', $status);
+        }
+        if ($paymentStatus = $request->string('payment_status')->toString()) {
+            $query->where('payment_status', $paymentStatus);
+        }
+        if ($search = trim($request->string('q')->toString())) {
+            $query->where(function ($q) use ($search) {
+                $q->where('order_number', 'like', '%'.$search.'%')
+                    ->orWhereHas('user', fn ($uq) => $uq->where('name', 'like', '%'.$search.'%')
+                        ->orWhere('email', 'like', '%'.$search.'%'));
+            });
+        }
+
+        $sort = $request->string('sort')->toString() === 'oldest' ? 'asc' : 'desc';
+        $orders = $query->orderBy('created_at', $sort)->paginate(20)->withQueryString();
+
+        $orders->getCollection()->transform(function (Order $order) use ($summary, $fulfillment, $payments, $gateways, $states) {
             $order->setAttribute('fulfillment_summary', $summary->summarize($order));
             $order->setAttribute('fulfillment_summary_label', $summary->label($order->fulfillment_summary));
+            $order->setAttribute('admin_allowed_next_statuses', $states->allowedNext($order->status ?: 'pending'));
 
             $allowedByItem = [];
             foreach ($order->items as $item) {
@@ -285,26 +277,24 @@ class AdminController extends Controller
         return back()->with('success', 'Payment status updated.');
     }
 
-    public function updateOrderStatus(Request $request, $id): RedirectResponse
-    {
+    public function updateOrderStatus(
+        Request $request,
+        $id,
+        \App\Services\Orders\OrderStateMachine $states,
+    ): RedirectResponse {
         $order = Order::findOrFail($id);
+        $this->authorize('update', $order);
 
         $request->validate([
-            'status' => 'required|in:pending,shipped,completed',
+            'status' => 'required|in:'.implode(',', \App\Services\Orders\OrderStateMachine::MUTABLE_STATUSES),
+            'reason' => 'nullable|string|max:500',
         ]);
 
-        $before = $order->status;
-        $order->status = $request->status;
-        $order->save();
-
-        $this->audit->log(
-            action: 'ORDER_STATUS_CHANGED',
-            actor: auth()->user(),
-            resourceType: 'order',
-            resourceId: $order->id,
-            oldValues: ['status' => $before],
-            newValues: ['status' => $order->status],
-        );
+        try {
+            $states->transition($order, $request->status, $request->user(), $request->input('reason'));
+        } catch (\InvalidArgumentException $e) {
+            return back()->with('error', $e->getMessage());
+        }
 
         return back()->with('success', 'Order status updated successfully.');
     }

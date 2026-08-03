@@ -24,6 +24,15 @@
     @isset($paymentInit)
         @include('partials.payment-status-panel', ['order' => $order, 'paymentInit' => $paymentInit])
     @endisset
+
+    @if(!empty($canCancel))
+        <form method="POST" action="{{ route('account.orders.cancel', $order) }}" style="margin:1rem 0;" onsubmit="return confirm('Cancel this order?');">
+            @csrf
+            <input type="hidden" name="reason" value="Cancelled by customer">
+            <button class="btn btn-ghost" type="submit">Cancel order</button>
+        </form>
+    @endif
+
     @if($order->shipping_address)
         <div class="panel" style="background:var(--color-surface);">
             <strong>Ship to</strong>
@@ -52,7 +61,7 @@
             <div style="padding:.85rem 0;border-bottom:1px solid var(--color-border);">
                 <div style="display:flex;justify-content:space-between;gap:1rem;align-items:flex-start;">
                     <div>
-                        <strong>{{ $item->product->name ?? 'Product' }}</strong>
+                        <strong>{{ $item->displayName() }}</strong>
                         <div style="color:var(--color-ink-muted);font-size:.9rem;">
                             Vendor: {{ $group['store_name'] }} · Qty {{ $item->quantity }} · {{ money($item->price) }} each
                         </div>

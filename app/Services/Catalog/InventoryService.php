@@ -111,8 +111,9 @@ class InventoryService
     }
 
     /**
-     * Integration point for Orders phase — reserve stock without committing sale.
-     * Not wired to checkout yet; documented for future use.
+     * Reserve available stock for checkout (moves into reserved_quantity).
+     * Checkout currently reserves then immediately commits via commitSaleFromReserved
+     * in the same transaction. Split commit-on-payment is deferred to Finance phase.
      */
     public function reserve(Product $product, int $qty, ?User $actor = null, ?string $referenceId = null): Product
     {
@@ -183,6 +184,51 @@ class InventoryService
                 'reserved_before' => $reserved,
                 'reserved_after' => (int) $locked->reserved_quantity,
                 'reason' => 'Reserved stock released',
+                'reference_type' => 'order',
+                'reference_id' => $referenceId,
+                'created_at' => now(),
+            ]);
+
+            return $locked->fresh();
+        });
+    }
+
+    /**
+     * Commit previously reserved stock as sold (does not decrement available again).
+     */
+    public function commitSaleFromReserved(
+        Product $product,
+        int $qty,
+        ?User $actor = null,
+        ?string $referenceId = null,
+    ): Product {
+        if ($qty <= 0) {
+            throw new InvalidArgumentException('Sale quantity must be positive.');
+        }
+
+        return DB::transaction(function () use ($product, $qty, $actor, $referenceId) {
+            /** @var Product $locked */
+            $locked = Product::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
+            $available = (int) $locked->stock;
+            $reserved = (int) ($locked->reserved_quantity ?? 0);
+
+            if ($reserved < $qty) {
+                throw new InvalidArgumentException('Cannot sell more than reserved.');
+            }
+
+            $locked->reserved_quantity = $reserved - $qty;
+            $locked->save();
+
+            InventoryMovement::query()->create([
+                'product_id' => $locked->id,
+                'actor_user_id' => $actor?->id,
+                'type' => InventoryMovement::TYPE_SALE,
+                'quantity_before' => $available,
+                'quantity_delta' => 0,
+                'quantity_after' => $available,
+                'reserved_before' => $reserved,
+                'reserved_after' => (int) $locked->reserved_quantity,
+                'reason' => 'Reserved stock committed as sold',
                 'reference_type' => 'order',
                 'reference_id' => $referenceId,
                 'created_at' => now(),

@@ -35,7 +35,10 @@ class OrderController extends Controller
         }
 
         $itemQuery = OrderItem::query()
-            ->whereHas('product', fn ($q) => $q->where('vendor_id', $vendorId));
+            ->where(function ($q) use ($vendorId) {
+                $q->where('vendor_id', $vendorId)
+                    ->orWhereHas('product', fn ($pq) => $pq->where('vendor_id', $vendorId));
+            });
 
         if ($fulfillmentFilter) {
             $itemQuery->where('fulfillment_status', $fulfillmentFilter);
@@ -46,7 +49,10 @@ class OrderController extends Controller
         $orders = Order::query()
             ->whereIn('id', $orderIds)
             ->with(['items' => function ($q) use ($vendorId, $fulfillmentFilter) {
-                $q->whereHas('product', fn ($pq) => $pq->where('vendor_id', $vendorId));
+                $q->where(function ($iq) use ($vendorId) {
+                    $iq->where('vendor_id', $vendorId)
+                        ->orWhereHas('product', fn ($pq) => $pq->where('vendor_id', $vendorId));
+                });
                 if ($fulfillmentFilter) {
                     $q->where('fulfillment_status', $fulfillmentFilter);
                 }
@@ -80,14 +86,19 @@ class OrderController extends Controller
 
         $hasVendorItems = OrderItem::query()
             ->where('order_id', $order->id)
-            ->whereHas('product', fn ($q) => $q->where('vendor_id', $vendorId))
+            ->where(function ($q) use ($vendorId) {
+                $q->where('vendor_id', $vendorId)
+                    ->orWhereHas('product', fn ($pq) => $pq->where('vendor_id', $vendorId));
+            })
             ->exists();
 
         abort_unless($hasVendorItems, 403);
 
         $order->load(['user', 'items' => function ($q) use ($vendorId) {
-            $q->whereHas('product', fn ($pq) => $pq->where('vendor_id', $vendorId))
-                ->with('product');
+            $q->where(function ($iq) use ($vendorId) {
+                $iq->where('vendor_id', $vendorId)
+                    ->orWhereHas('product', fn ($pq) => $pq->where('vendor_id', $vendorId));
+            })->with('product');
         }]);
 
         $vendorSubtotal = $order->items->reduce(

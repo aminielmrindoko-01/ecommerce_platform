@@ -77,6 +77,12 @@ Route::middleware('auth')->group(function () {
     Route::put('/account/profile', [AccountController::class, 'updateProfile'])->name('account.profile.update');
     Route::get('/account/orders', [AccountController::class, 'orders'])->name('account.orders');
     Route::get('/account/orders/{order}', [AccountController::class, 'showOrder'])->name('account.orders.show');
+    Route::post('/account/orders/{order}/cancel', [AccountController::class, 'cancelOrder'])->name('account.orders.cancel');
+
+    Route::get('/vendor/apply', [\App\Http\Controllers\VendorApplicationController::class, 'create'])->name('vendor.apply');
+    Route::post('/vendor/apply', [\App\Http\Controllers\VendorApplicationController::class, 'store'])
+        ->middleware('throttle:5,1')
+        ->name('vendor.apply.store');
     Route::get('/account/addresses', [AccountController::class, 'addresses'])->name('account.addresses');
     Route::post('/account/addresses', [AccountController::class, 'storeAddress'])->name('account.addresses.store');
     Route::delete('/account/addresses/{address}', [AccountController::class, 'destroyAddress'])->name('account.addresses.destroy');

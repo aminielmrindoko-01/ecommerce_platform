@@ -23,10 +23,11 @@ trait CreatesMarketplace
         $vendor = new Vendor(array_merge([
             'store_name' => 'Store '.$user->id,
             'email' => 'store'.$user->id.'@example.com',
-        ], collect($vendorOverrides)->except(['is_verified', 'rating_avg', 'user_id'])->all()));
+        ], collect($vendorOverrides)->except(['is_verified', 'rating_avg', 'user_id', 'status'])->all()));
         $trust = [
             'user_id' => $user->id,
             'is_verified' => (bool) ($vendorOverrides['is_verified'] ?? true),
+            'status' => $vendorOverrides['status'] ?? ((($vendorOverrides['is_verified'] ?? true) ? 'approved' : 'pending')),
         ];
         if (array_key_exists('rating_avg', $vendorOverrides)) {
             $trust['rating_avg'] = $vendorOverrides['rating_avg'];

@@ -9,6 +9,7 @@
 use App\Http\Controllers\Admin\CategoryController as AdminCategoryController;
 use App\Http\Controllers\Admin\InventoryController as AdminInventoryController;
 use App\Http\Controllers\Admin\ProductController as AdminProductController;
+use App\Http\Controllers\Admin\VendorController as AdminVendorController;
 use App\Http\Controllers\AdminController;
 use Illuminate\Support\Facades\Route;
 
@@ -47,8 +48,12 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
         ->name('products.destroy');
 
     Route::middleware('permission:vendors.view')->group(function () {
-        Route::get('/vendors', [AdminController::class, 'vendors'])->name('vendors');
+        Route::get('/vendors', [AdminVendorController::class, 'index'])->name('vendors');
     });
+    Route::post('/vendors/{vendor}/status', [AdminVendorController::class, 'transition'])
+        ->middleware('permission:vendors.approve,vendors.reject,vendors.suspend,vendors.update')
+        ->name('vendors.status');
+    // Legacy toggle kept as thin wrapper for approve/suspend via status service.
     Route::post('/vendors/{id}/toggle', [AdminController::class, 'toggleVendorVerification'])
         ->middleware('permission:vendors.approve,vendors.suspend')
         ->name('vendors.toggle');
