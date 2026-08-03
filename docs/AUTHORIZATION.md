@@ -258,10 +258,16 @@ Every new protected SANA Market feature **must** ship with all of the following 
 5. **Business authorization** — state-machine / domain rules after ACL
 6. **Audit logging** — sensitive mutations emit audit (and security events on abuse)
 7. **Security tests** — feature/HTTP tests covering allow **and** deny (including IDOR/BOLA and privilege escalation where relevant)
+8. **Transaction safety** — multi-row mutations use DB transactions / row locks where concurrency matters
+9. **Secure error handling** — no secrets, SQL, or filesystem paths in client responses
 
 Frontend permission checks are **UX only**. Backend denial is mandatory even when UI hides the action.
 
 Step-up (`stepup`) is required for: privileged role changes, MFA disable, and future payment-config / payout / Super-Admin creation routes when those modules exist.
+
+### Catalog operations note
+
+Product/category/inventory admin modules use the services in `App\Services\Catalog\*` and existing RBAC permissions. Stock mutations go through `InventoryService` (locked + audited). See `docs/CATALOG_OPERATIONS.md`.
 
 ---
 
