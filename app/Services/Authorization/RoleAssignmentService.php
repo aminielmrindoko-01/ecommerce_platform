@@ -125,6 +125,78 @@ class RoleAssignmentService
         $this->permissions->forget($user);
     }
 
+    /**
+     * First-time Super Admin bootstrap only.
+     *
+     * Locks the super_admin role row and refuses if any user already holds it.
+     * Must be called inside a DB transaction opened by the bootstrap service.
+     * Does not accept an actor — this is infrastructure-level initial setup.
+     */
+    public function bootstrapFirstSuperAdmin(User $target): void
+    {
+        if (! Schema::hasTable('roles') || ! Schema::hasTable('user_roles')) {
+            throw new InvalidArgumentException('RBAC tables are not available. Run migrations and seed the RBAC catalog first.');
+        }
+
+        /** @var Role $role */
+        $role = Role::query()->where('name', 'super_admin')->lockForUpdate()->first();
+        if (! $role) {
+            throw new InvalidArgumentException('The super_admin role is missing. Seed the RBAC catalog first (php artisan db:seed --class=RbacSeeder).');
+        }
+
+        $alreadyAssigned = DB::table('user_roles')
+            ->where('role_id', $role->id)
+            ->lockForUpdate()
+            ->exists();
+
+        if ($alreadyAssigned) {
+            throw new InvalidArgumentException(
+                'A Super Admin already exists. The bootstrap command is only for initial setup and is now locked.'
+            );
+        }
+
+        if ($target->roles()->where('name', 'super_admin')->exists()) {
+            throw new InvalidArgumentException('Target user is already a Super Admin.');
+        }
+
+        $before = $target->roles()->pluck('name')->all();
+
+        // Authoritative RBAC assignment — privileges come from this role, not users.role.
+        $target->roles()->sync([$role->id]);
+
+        // Align marketplace identity column for admin middleware compatibility only.
+        $target->forceFill(['role' => 'admin'])->save();
+
+        $this->permissions->forget($target);
+
+        $this->audit->log(
+            action: 'USER_ROLE_CHANGED',
+            actor: null,
+            resourceType: 'user',
+            resourceId: $target->id,
+            oldValues: ['roles' => $before],
+            newValues: [
+                'roles' => ['super_admin'],
+                'source' => 'super_admin_bootstrap',
+            ],
+            category: 'security',
+        );
+    }
+
+    /**
+     * Authoritative check: any user holds RBAC super_admin via user_roles.
+     */
+    public function superAdminExists(): bool
+    {
+        if (! Schema::hasTable('roles') || ! Schema::hasTable('user_roles')) {
+            return false;
+        }
+
+        return User::query()
+            ->whereHas('roles', fn ($q) => $q->where('name', 'super_admin'))
+            ->exists();
+    }
+
     protected function actorIsSuperAdmin(User $actor): bool
     {
         return in_array('super_admin', $actor->roleNames(), true);

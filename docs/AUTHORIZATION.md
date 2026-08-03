@@ -312,6 +312,22 @@ Double-entry ledger, vendor entitlements, commission snapshots, payable derivati
 
 **PAYOUT INTEGRATION STATUS: SANDBOX / NOT PRODUCTION-READY**
 
+### Super Admin bootstrap
+
+When **no** RBAC `super_admin` exists yet:
+
+```bash
+php artisan admin:create-super-admin
+```
+
+- Creates the first Super Admin through `SuperAdminBootstrapService` + `RoleAssignmentService::bootstrapFirstSuperAdmin`
+- Passwords are interactive/hidden (never CLI args); hashed via the User model cast
+- Locked after the first Super Admin exists (checks `user_roles` → `roles`, not `users.role`)
+- Audits `SUPER_ADMIN_BOOTSTRAPPED` without secrets
+- Does not create a login session; MFA enrollment still required per config
+
+Full procedure and recovery (infrastructure-only, no backdoor): `docs/SUPER_ADMIN_BOOTSTRAP.md`.
+
 ---
 
 ## Least-privilege notes (recommendations only)
