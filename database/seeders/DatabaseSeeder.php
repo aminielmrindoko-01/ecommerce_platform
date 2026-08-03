@@ -8,7 +8,8 @@ use Illuminate\Database\Seeder;
 /**
  * Seeds demo admin/customer/vendor accounts, then marketplace catalog data.
  *
- * Default password for all demo users: `password` (local/dev only).
+ * Local/dev only. Super Admin demo: admin@market.com / password123
+ * Other demo users default password: password
  *
  * @package Database\Seeders
  */
@@ -20,10 +21,10 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         User::updateOrCreate(
-            ['email' => 'admin@example.com'],
+            ['email' => 'admin@market.com'],
             [
-                'name' => 'Admin User',
-                'password' => 'password',
+                'name' => 'Market Super Admin',
+                'password' => 'password123',
                 'phone' => '+255700000001',
             ]
         )->forceFill(['role' => 'admin', 'is_active' => true])->save();
