@@ -8,6 +8,7 @@
 
 use App\Http\Controllers\Admin\CategoryController as AdminCategoryController;
 use App\Http\Controllers\Admin\InventoryController as AdminInventoryController;
+use App\Http\Controllers\Admin\PaymentController as AdminPaymentController;
 use App\Http\Controllers\Admin\ProductController as AdminProductController;
 use App\Http\Controllers\Admin\VendorController as AdminVendorController;
 use App\Http\Controllers\AdminController;
@@ -77,6 +78,19 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::patch('/orders/{order}/items/{orderItem}/fulfillment', [AdminController::class, 'updateItemFulfillment'])
         ->middleware('permission:orders.update')
         ->name('orders.items.fulfillment');
+
+    Route::get('/payments', [AdminPaymentController::class, 'index'])
+        ->middleware('permission:payments.view,transactions.view')
+        ->name('payments.index');
+    Route::get('/payments/refunds', [AdminPaymentController::class, 'refunds'])
+        ->middleware('permission:payments.view,refunds.create')
+        ->name('payments.refunds');
+    Route::get('/payments/reconciliations', [AdminPaymentController::class, 'reconciliations'])
+        ->middleware('permission:payments.view')
+        ->name('payments.reconciliations');
+    Route::post('/payments/{payment}/refund', [AdminPaymentController::class, 'storeRefund'])
+        ->middleware(['permission:refunds.create', 'stepup'])
+        ->name('payments.refund');
 
     // Categories
     Route::get('/categories', [AdminCategoryController::class, 'index'])

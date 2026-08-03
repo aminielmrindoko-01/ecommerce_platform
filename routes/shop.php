@@ -78,6 +78,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/account/orders', [AccountController::class, 'orders'])->name('account.orders');
     Route::get('/account/orders/{order}', [AccountController::class, 'showOrder'])->name('account.orders.show');
     Route::post('/account/orders/{order}/cancel', [AccountController::class, 'cancelOrder'])->name('account.orders.cancel');
+    Route::get('/account/payments', [AccountController::class, 'payments'])->name('account.payments');
 
     Route::get('/vendor/apply', [\App\Http\Controllers\VendorApplicationController::class, 'create'])->name('vendor.apply');
     Route::post('/vendor/apply', [\App\Http\Controllers\VendorApplicationController::class, 'store'])

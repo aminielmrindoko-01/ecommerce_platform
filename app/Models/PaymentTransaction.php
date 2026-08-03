@@ -7,18 +7,21 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
- * Order-level payment transaction (foundation: manual/stub providers only).
+ * Order-level payment attempt / transaction.
  *
  * Sensitive financial fields are assigned by PaymentService, not form requests.
+ * Canonical success status remains `paid` (SUCCEEDED in architecture docs).
  */
 class PaymentTransaction extends Model
 {
     public const STATUSES = [
         'pending',
+        'initiated',
         'processing',
-        'paid',
+        'paid', // SUCCEEDED
         'failed',
         'cancelled',
+        'expired',
         'refunded',
         'partially_refunded',
     ];
@@ -30,9 +33,6 @@ class PaymentTransaction extends Model
     ];
 
     /**
-     * Only non-sensitive display/metadata fields may be mass-assigned.
-     * order_id, amount, status, reference, provider_reference are service-assigned.
-     *
      * @var list<string>
      */
     protected $fillable = [
@@ -46,8 +46,11 @@ class PaymentTransaction extends Model
     {
         return [
             'amount' => 'decimal:2',
+            'refunded_amount' => 'decimal:2',
             'metadata' => 'array',
             'paid_at' => 'datetime',
+            'initiated_at' => 'datetime',
+            'completed_at' => 'datetime',
         ];
     }
 
@@ -61,8 +64,22 @@ class PaymentTransaction extends Model
         return $this->hasMany(PaymentStatusHistory::class);
     }
 
+    public function refunds(): HasMany
+    {
+        return $this->hasMany(PaymentRefund::class);
+    }
+
     public static function isValidStatus(string $status): bool
     {
         return in_array($status, self::STATUSES, true);
+    }
+
+    public function remainingRefundable(): string
+    {
+        $paid = bcadd((string) ($this->getAttributes()['amount'] ?? '0'), '0', 2);
+        $refunded = bcadd((string) ($this->getAttributes()['refunded_amount'] ?? '0'), '0', 2);
+        $remaining = bcsub($paid, $refunded, 2);
+
+        return bccomp($remaining, '0.00', 2) < 0 ? '0.00' : $remaining;
     }
 }

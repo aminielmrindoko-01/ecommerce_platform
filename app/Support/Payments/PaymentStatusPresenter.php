@@ -14,10 +14,12 @@ final class PaymentStatusPresenter
     {
         return [
             'pending' => 'Pending',
+            'initiated' => 'Initiated',
             'processing' => 'Processing',
             'paid' => 'Paid',
             'failed' => 'Failed',
             'cancelled' => 'Cancelled',
+            'expired' => 'Expired',
             'refunded' => 'Refunded',
             'partially_refunded' => 'Partially Refunded',
         ];

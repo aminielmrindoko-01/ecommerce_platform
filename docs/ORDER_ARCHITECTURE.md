@@ -121,26 +121,24 @@ Helpers (Phase 3 + 4):
 | `releaseReserved` | reserved ↓, available ↑ |
 | `commitSaleFromReserved` | reserved ↓ (sale movement; available unchanged) |
 
-### Current checkout (transitional)
+### Current checkout (Phase 5)
 
-Inside one DB transaction:
+Inside one DB transaction at place:
 
 1. Validate cart (published, approved vendor, stock, server prices)
 2. Create order + snapshot items
-3. `reserve` → `commitSaleFromReserved` (parity with prior `decrement`)
+3. `reserve` only → `orders.inventory_state = reserved`
 4. Audit `ORDER_CREATED`
 
-### Remaining migration (Finance phase)
-
-Preferred end state:
+Then payment attempt is created; gateway init stamps `initiated_at`.
 
 ```
-checkout → reserve
-payment success → commitSaleFromReserved
-payment fail / expiry → releaseReserved
+payment SUCCESS (verified) → commitSaleFromReserved → inventory_state=committed → order confirmed
+payment FAILED / EXPIRED / unpaid cancel → releaseReserved → inventory_state=released
+duplicate paid webhook → idempotent (no double-commit)
 ```
 
-Do not split commit until payment confirmation is production-ready for all methods.
+See `docs/PAYMENT_ARCHITECTURE.md`.
 
 Concurrency: `lockForUpdate` on product rows; second buyer with stock=1 fails.
 
