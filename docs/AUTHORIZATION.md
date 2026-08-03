@@ -1,103 +1,257 @@
-# Authorization & RBAC Developer Guide
+# Authorization & RBAC Developer Guide (Phase 2 Hardened)
 
-SANA Market uses a layered authorization model:
+SANA Market authorization is layered and **deny-by-default**:
 
-1. **Authentication** — Laravel session identity
-2. **Permission check** — RBAC `resource.action` permissions
-3. **Ownership / object check** — vendor/customer resource isolation
-4. **Audit** — append-only business + security events
+1. Authentication (Laravel session)
+2. Active account check
+3. RBAC roles → permissions
+4. Resource ownership
+5. Allow / Deny
 
-Frontend `@canPermission` / hidden nav items are **UX only**. The backend is the security boundary.
+Frontend `@canPermission` / hidden nav = **UX only**. Backend is the security boundary.
 
-## Core components
+---
+
+## 1. Authentication architecture
+
+- Session cookies (Laravel defaults: HttpOnly, encrypted session)
+- Login throttled; inactive accounts rejected
+- Privileged users with MFA enabled complete a TOTP challenge before the session is trusted
+- Registration always creates `customer` identity + RBAC `customer` role (client cannot set role)
+- Password step-up confirms sensitive mutations within a short TTL
+
+## 2. RBAC architecture
 
 | Piece | Location |
 |-------|----------|
-| Permission catalog + role maps | `config/authorization.php` |
+| Catalog + role maps | `config/authorization.php` |
 | Resolver | `App\Services\Authorization\PermissionResolver` |
 | Role assignment | `App\Services\Authorization\RoleAssignmentService` |
-| Audit writer | `App\Services\Authorization\AuditLogger` |
-| Middleware | `admin`, `vendor`, `permission:…` |
+| Audit | `App\Services\Authorization\AuditLogger` |
+| MFA | `App\Services\Security\MfaService` + `TotpService` |
+| Step-up | `App\Services\Security\StepUpAuthService` |
+| Middleware | `admin`, `vendor`, `permission:…`, `role:…`, `stepup` |
 | Policies | `app/Policies/*` |
-| Seeder | `Database\Seeders\RbacSeeder` |
 
-## Roles
+Do **not** introduce a second authorization system. Extend this stack.
 
-Platform: `super_admin`, `admin`, `product_manager`, `inventory_manager`, `order_manager`, `customer_support`, `vendor_manager`, `marketing_manager`, `review_moderator`, `finance_manager`, `auditor`
+## 3. Permission naming
 
-Marketplace: `vendor`, `customer`
+`resource.action` — e.g. `products.update`, `orders.manage_any`, `reviews.moderate`.
 
-Legacy `users.role` (`admin|vendor|customer`) remains for marketplace identity and is bridged to RBAC when a user has no `user_roles` rows yet.
+`*.manage_any` grants cross-tenant platform access. Vendors get capabilities **without** `manage_any` and must pass ownership.
 
-## Permission naming
+## 4. Role hierarchy (logical)
 
-Use `resource.action` (examples: `products.update`, `orders.manage_any`, `reviews.moderate`).
+| Role | Intent |
+|------|--------|
+| `super_admin` | All permissions (`*`); protected assignment |
+| `admin` | Broad operations (not unrestricted security assignment) |
+| `product_manager` | Catalog + publish |
+| `inventory_manager` | Stock adjust / history |
+| `order_manager` | Order lifecycle |
+| `customer_support` | Customer + order view |
+| `vendor_manager` | Vendor lifecycle |
+| `marketing_manager` | Coupons |
+| `review_moderator` | Review moderation |
+| `finance_manager` | Payments / refunds / payouts |
+| `auditor` | Read-only audit / security / finance views |
+| `vendor` | Own catalog / inventory / orders |
+| `customer` | Own orders / wishlist / addresses / profile |
 
-`products.manage_any` / `orders.manage_any` grant cross-tenant platform access. Vendors get capability permissions **without** `manage_any` and must pass ownership checks.
-
-## Protecting a new admin route
-
-```php
-Route::get('/admin/reports', ...)->middleware(['auth', 'admin', 'permission:audit_logs.view']);
-```
-
-Optionally hide the nav link:
-
-```blade
-@canPermission('audit_logs.view')
-  <a href="...">Reports</a>
-@endcanPermission
-```
-
-## Protecting a resource action
-
-```php
-$this->authorize('update', $product); // ProductPolicy: permission + ownership
-```
-
-## Creating a permission
-
-1. Add the name to `config/authorization.php` → `permissions`
-2. Add it to the appropriate role maps
-3. Run `php artisan db:seed --class=RbacSeeder`
-4. Enforce with `permission:` middleware and/or policy
-
-## Creating a role
-
-1. Add a map under `config/authorization.php` → `roles`
-2. Reseed `RbacSeeder`
-3. Assign via admin Users UI or `RoleAssignmentService`
-
-## Ownership rules
+## 5. Ownership rules
 
 | Resource | Rule |
 |----------|------|
-| Product (vendor) | `product.vendor_id === auth.user.vendor.id` |
+| Product (vendor) | `product.vendor_id === auth.vendor.id` |
 | Order (customer) | `order.user_id === auth.id` |
 | Order (vendor) | vendor has a line item on the order |
-| Address | `address.user_id === auth.id` |
-| Payment manage | `payments.manage` only (never vendors) |
+| OrderItem fulfillment | vendor owns the item **or** `orders.manage_any` |
+| Address / wishlist | `user_id === auth.id` |
+| Vendor profile | owns vendor record **or** `vendors.*` platform perms |
+| Payments manage | `payments.manage` only (never client-supplied ids) |
 
-## Fail closed
+## 6. Admin authorization
 
-Missing role/permission, inactive user, unresolved owner, or resolver failure → **deny** (403 authenticated / 401 guest).
+- Shell: `auth` + `admin` (`admin.access`) + active account
+- Module routes add `permission:…` for view/mutate
+- Mutations that change roles require `stepup`
+- `MFA_ENFORCE_ENROLLMENT` can require TOTP enrollment for privileged roles before admin shell
+- Nav is permission-aware (UX); HTTP still enforces permissions
 
-## Super Admin protections
+### Admin route matrix (summary)
 
-- Protected role; ordinary admins cannot assign `super_admin`
-- Cannot remove the last Super Admin
-- Role changes are security-audited
+| Route | Methods | Auth | Permission | Sensitive / step-up | Audit |
+|-------|---------|------|------------|---------------------|-------|
+| `/admin` | GET | admin | `admin.access` / `dashboard.view` | — | — |
+| `/admin/products` | GET | admin | `products.view` | — | — |
+| `/admin/products/{id}` | DELETE | admin | `products.delete` | — | product delete |
+| `/admin/orders` | GET | admin | `orders.view` | — | — |
+| `/admin/orders/{id}` | PUT | admin | `orders.update` | — | order status |
+| `/admin/orders/{order}/payment` | PATCH | admin | `payments.manage` | finance | payment change |
+| `/admin/orders/…/fulfillment` | PATCH | admin | `orders.update` | — | fulfillment |
+| `/admin/users` | GET | admin | `users.view` | — | — |
+| `/admin/users/{id}` | PUT | admin | `users.update` | **stepup** | `USER_ROLE_CHANGED` |
+| `/admin/vendors` | GET | admin | `vendors.view` | — | — |
+| `/admin/vendors/{id}/toggle` | POST | admin | `vendors.suspend` / approve | — | vendor suspend/approve |
+| `/admin/reviews` | GET | admin | `reviews.view` | — | — |
+| `/admin/reviews/{review}/moderate` | PATCH | admin | `reviews.moderate` (+ action) | — | review approve/reject |
+| `/admin/roles` | GET | admin | `roles.view` | — | — |
+| `/admin/inventory` | GET | admin | `inventory.view` | — | — |
+| `/admin/audit-logs` | GET | admin | `audit_logs.view` | read-only | — |
+| `/admin/security-events` | GET | admin | `security_events.view` | read-only | — |
 
-## Audit & security events
+## 7. Vendor isolation
 
-- `audit_logs` — business + security category trail (append-only)
-- `security_events` — login failures, permission denials, escalation attempts
+- `VendorMiddleware`: marketplace `users.role === vendor` **and** `vendor.access` **and** vendor profile
+- Policies deny cross-vendor product/order/inventory access
+- Never trust client `vendor_id` for ownership
 
-Never log passwords, tokens, or secrets.
+## 8. Customer isolation
 
-## Tests
+- Orders, addresses, wishlist scoped to `auth.id`
+- Policies deny IDOR/BOLA across customers
+- Never trust client `user_id` / `customer_id`
+
+## 9. MFA
+
+- TOTP (RFC 6238); secrets encrypted at rest (`encrypted` cast)
+- Recovery codes stored hashed; plaintext shown once at enrollment
+- Required roles (config): `super_admin`, `admin`, `finance_manager`, `vendor_manager`
+- `MFA_ENFORCE_ENROLLMENT=true` blocks admin shell until enrolled
+- Disable MFA requires password step-up + valid TOTP
+- Never log TOTP secrets / recovery plaintext / passwords / tokens
+- Not implemented: WebAuthn, SMS OTP, long-lived trusted-device cookies
+
+Routes: `/account/security`, `/security/mfa/*`, challenge after login when enabled.
+
+## 10. Step-up authentication
+
+Flow:
+
+```
+Authenticated session → sensitive action → permission check
+→ require recent password confirmation (TTL) → perform → audit
+```
+
+- Session key `auth.step_up_confirmed_at`
+- TTL: `STEP_UP_TTL_SECONDS` (default 300)
+- Middleware alias: `stepup`
+- Applied to admin user role changes; MFA disable uses the same service
+- Failed / missing step-up creates security events
+
+Configurable sensitive actions (extend middleware on routes): Super Admin creation, privileged role changes, payment config, large refunds/payouts, MFA disable, security settings.
+
+## 11. Audit logging
+
+Append-only `audit_logs`. Ordinary admins cannot mutate history (no update/delete routes).
+
+Events include: `LOGIN_SUCCESS`, `LOGIN_FAILED`, `PERMISSION_DENIED`, `USER_ROLE_CHANGED`, `PRODUCT_*`, `ORDER_STATUS_CHANGED`, `VENDOR_*`, `REVIEW_*`, `MFA_*`, `STEP_UP_*`, security setting changes.
+
+Payloads should reconstruct actor, target, before/after where applicable — **never** secrets.
+
+## 12. Security events
+
+Suspicious patterns write `security_events`, e.g.:
+
+- Repeated auth / authorization failures
+- Cross-tenant access attempts
+- Privilege escalation attempts
+- Unauthorized role / permission modification
+- MFA / step-up manipulation
+
+Do not log passwords, TOTP secrets, tokens, or full payment credentials.
+
+## 13. Legacy `users.role` migration
+
+`users.role` is **marketplace identity** (`customer|vendor|admin`), not authorization authority.
+
+| Usage | Classification | Status |
+|-------|----------------|--------|
+| VendorMiddleware `role === vendor` | Marketplace identity + permission | Kept (with `vendor.access`) |
+| PermissionResolver materialize | Compatibility | Maps empty `user_roles` → RBAC once |
+| Admin users UI display | Display | Kept |
+| `isAdmin()` | Authorization | **RBAC `admin.access` only** |
+| `isSuperAdmin()` | Authorization | **RBAC `super_admin` only** |
+| `RoleMiddleware` | Authorization | **RBAC role names only** |
+| FormRequests (payment/fulfillment) | Authorization | **permissions only** |
+
+**Priority:** Assigned RBAC roles always win. `users.role` cannot widen permissions (e.g. `role=admin` + RBAC `customer` ≠ admin access).
+
+**Removal plan:**
+
+1. Ensure every user has `user_roles` (materialize / backfill)
+2. Replace marketplace checks with `hasRole('vendor')` / account-type column
+3. Stop materializing from `users.role`
+4. Rename to `account_type` for shop UX
+5. Drop column after one release with monitoring
+
+## 14. Testing methodology
+
+- Feature tests hit real HTTP routes (not only unit mocks)
+- Cover privilege escalation, IDOR/BOLA, mass assignment, fail-closed, cache invalidation, MFA, step-up
+- Frontend hide/show is **not** security; always re-test with direct HTTP
 
 ```bash
 php artisan test --filter=RbacAuthorizationTest
+php artisan test --filter=SecurityHardeningTest
 php artisan test
+npm run build
 ```
+
+## 15. Adding a new permission
+
+1. Add slug to `config/authorization.php` → `permissions`
+2. Attach to role maps under `roles`
+3. Run / update `RbacSeeder` (or sync command used in deploy)
+4. Protect route: `middleware('permission:resource.action')` and/or policy
+5. Audit sensitive mutations
+6. Add feature tests (allow + deny)
+
+## 16. Adding a new role
+
+1. Add role map in `config/authorization.php`
+2. Seed role + permissions
+3. Decide MFA requirement (`mfa.required_roles`)
+4. Document least-privilege intent
+5. Tests for allow/deny and non-escalation
+
+## 17. Protecting a new route
+
+```php
+Route::post('/admin/x', [...])
+    ->middleware(['auth', 'admin', 'permission:products.create', 'stepup']);
+```
+
+Prefer specific permissions over bare `admin` middleware for mutations.
+
+## 18. Protecting a new resource
+
+```php
+$this->authorize('update', $product); // policy: permission + ownership
+```
+
+Never authorize from request payload identity fields.
+
+## 19. Security checklist for developers
+
+- [ ] Never trust client `user_id` / `vendor_id` / `role` / `permissions`
+- [ ] Prefer `permission:` over legacy role checks
+- [ ] Add ownership checks for tenant resources
+- [ ] Audit sensitive mutations
+- [ ] Require `stepup` for privilege / finance / MFA-disable actions
+- [ ] Do not log secrets
+- [ ] Fail closed on missing roles/permissions/inactive users
+- [ ] Invalidate permission cache on role/permission changes
+- [ ] Add HTTP feature tests for allow + deny paths
+
+---
+
+## Least-privilege notes (recommendations only)
+
+Do **not** change these without product sign-off:
+
+- `admin` includes `payments.manage` and `refunds.create` — consider finance-only for refunds/payouts
+- `product_manager` lacks `products.delete` (good) — confirm intentional
+- `order_manager` has `orders.cancel` but not `orders.refund` (good)
+- `auditor` is read-oriented — keep write permissions out
