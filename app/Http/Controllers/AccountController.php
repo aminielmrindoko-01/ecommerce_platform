@@ -12,6 +12,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Address;
 use App\Models\Order;
+use App\Models\PaymentTransaction;
 use App\Models\Wishlist;
 use App\Services\OrderFulfillmentSummary;
 use App\Services\Orders\OrderService;
@@ -125,6 +126,20 @@ class AccountController extends Controller
         return redirect()
             ->route('account.orders.show', $order)
             ->with('success', 'Order cancelled.');
+    }
+
+    /**
+     * Customer payment history (own payment attempts only).
+     */
+    public function payments(): View
+    {
+        $payments = PaymentTransaction::query()
+            ->whereHas('order', fn ($q) => $q->where('user_id', auth()->id()))
+            ->with('order')
+            ->latest('id')
+            ->paginate(15);
+
+        return view('account.payments', compact('payments'));
     }
 
     /**

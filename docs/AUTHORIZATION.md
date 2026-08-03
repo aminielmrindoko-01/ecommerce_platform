@@ -89,6 +89,10 @@ Do **not** introduce a second authorization system. Extend this stack.
 | `/admin/orders` | GET | admin | `orders.view` | — | — |
 | `/admin/orders/{id}` | PUT | admin | `orders.update` | — | order status |
 | `/admin/orders/{order}/payment` | PATCH | admin | `payments.manage` | finance | payment change |
+| `/admin/payments` | GET | admin | `payments.view` / `transactions.view` | — | — |
+| `/admin/payments/{payment}/refund` | POST | admin | `refunds.create` | **stepup** | `REFUND_*` |
+| `/admin/payments/reconciliations` | GET | admin | `payments.view` | — | — |
+| `/account/payments` | GET | auth | own payments | — | — |
 | `/admin/orders/…/fulfillment` | PATCH | admin | `orders.update` | — | fulfillment |
 | `/admin/users` | GET | admin | `users.view` | — | — |
 | `/admin/users/{id}` | PUT | admin | `users.update` | **stepup** | `USER_ROLE_CHANGED` |
@@ -279,7 +283,13 @@ Product/category/inventory admin modules use the services in `App\Services\Catal
 
 ### Marketplace / orders note (Phase 4)
 
-Multi-vendor orders, vendor lifecycle, order state machine, and cart price security are documented in `docs/ORDER_ARCHITECTURE.md`. Checkout uses `OrderService` + transitional reserve→commit; payment remains `PaymentService` / `PaymentGatewayInterface`.
+Multi-vendor orders, vendor lifecycle, order state machine, and cart price security are documented in `docs/ORDER_ARCHITECTURE.md`. Checkout uses `OrderService` + reserve-at-place; payment remains `PaymentService` / `PaymentGatewayInterface`.
+
+### Payments note (Phase 5)
+
+Payment attempts, inventory settlement on verified payment, refunds (step-up), reconciliation flags, and webhook replay protections are documented in `docs/PAYMENT_ARCHITECTURE.md`.
+
+**PAYMENT INTEGRATION STATUS: SANDBOX / NOT PRODUCTION-READY** (stub default; PesaPal sandbox optional).
 
 ---
 

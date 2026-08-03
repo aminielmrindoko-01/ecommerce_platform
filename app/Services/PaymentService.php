@@ -9,46 +9,85 @@ use App\Models\Order;
 use App\Models\PaymentStatusHistory;
 use App\Models\PaymentTransaction;
 use App\Models\User;
+use App\Services\Authorization\AuditLogger;
+use App\Services\Payments\OrderInventorySettlement;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 
 /**
- * Central authority for order payment state (foundation: manual/stub only).
+ * Central authority for order payment state.
  *
- * Uses lockForUpdate, decimal-safe comparisons, and unique references for idempotency.
+ * Gateways must never mark payments paid themselves — only this service
+ * (after verification / trusted admin action) mutates payment status.
  */
 class PaymentService
 {
     /**
+     * Canonical statuses (SUCCEEDED mapped as `paid` for compatibility).
+     *
      * @var array<string, list<string>>
      */
     protected array $transitions = [
-        'pending' => ['processing', 'failed', 'cancelled'],
-        'processing' => ['paid', 'failed', 'cancelled'],
+        'pending' => ['initiated', 'processing', 'failed', 'cancelled', 'expired'],
+        'initiated' => ['processing', 'failed', 'cancelled', 'expired'],
+        'processing' => ['paid', 'failed', 'cancelled', 'expired'],
         'paid' => ['partially_refunded', 'refunded'],
         'partially_refunded' => ['refunded'],
         'failed' => [],
         'cancelled' => [],
+        'expired' => [],
         'refunded' => [],
     ];
 
+    public function __construct(
+        protected AuditLogger $audit,
+        protected OrderInventorySettlement $inventorySettlement,
+    ) {}
+
     /**
-     * Create or reuse a pending stub/manual transaction for an order at checkout.
+     * Create or reuse an open payment attempt for an order.
+     * Supports optional idempotency_key (unique) for safe client retries.
      */
-    public function ensurePendingTransaction(Order $order, string $provider = 'stub'): PaymentTransaction
-    {
+    public function ensurePendingTransaction(
+        Order $order,
+        string $provider = 'stub',
+        ?string $idempotencyKey = null,
+    ): PaymentTransaction {
         if (! in_array($provider, PaymentTransaction::PROVIDERS, true)) {
             throw new InvalidArgumentException('Unsupported payment provider.');
         }
 
-        return DB::transaction(function () use ($order, $provider) {
+        if ($idempotencyKey !== null) {
+            $idempotencyKey = trim($idempotencyKey);
+            if ($idempotencyKey === '') {
+                $idempotencyKey = null;
+            }
+        }
+
+        return DB::transaction(function () use ($order, $provider, $idempotencyKey) {
+            if ($idempotencyKey !== null && Schema::hasColumn('payment_transactions', 'idempotency_key')) {
+                $byKey = PaymentTransaction::query()
+                    ->where('idempotency_key', $idempotencyKey)
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($byKey) {
+                    if ((int) $byKey->order_id !== (int) $order->id) {
+                        throw new InvalidArgumentException('Idempotency key already used for another order.');
+                    }
+
+                    return $byKey;
+                }
+            }
+
             /** @var Order $lockedOrder */
             $lockedOrder = Order::query()->whereKey($order->id)->lockForUpdate()->firstOrFail();
 
             $existing = PaymentTransaction::query()
                 ->where('order_id', $lockedOrder->id)
-                ->whereIn('status', ['pending', 'processing', 'paid'])
+                ->whereIn('status', ['pending', 'initiated', 'processing', 'paid'])
                 ->lockForUpdate()
                 ->latest('id')
                 ->first();
@@ -57,33 +96,110 @@ class PaymentService
                 return $existing;
             }
 
-            $amount = $this->authoritativeAmount($lockedOrder);
-
-            $tx = new PaymentTransaction;
-            $tx->order_id = $lockedOrder->id;
-            $tx->reference = $this->generateReference();
-            $tx->provider = $provider;
-            $tx->amount = $amount;
-            $tx->currency = 'TZS';
-            $tx->status = 'pending';
-            $tx->provider_reference = null;
-            $tx->metadata = [
-                'payment_method' => $lockedOrder->payment_method,
-                'source' => 'checkout',
-            ];
-            $tx->save();
-
-            if (($lockedOrder->payment_status ?: 'pending') !== 'pending') {
-                $lockedOrder->payment_status = 'pending';
-                $lockedOrder->save();
-            }
-
-            return $tx->fresh();
+            return $this->insertAttempt($lockedOrder, $provider, $idempotencyKey, 'checkout');
         });
     }
 
     /**
-     * Admin/foundation transition for an order's active payment transaction.
+     * Explicitly create a new payment attempt (e.g. after a failed attempt).
+     */
+    public function createAttempt(
+        Order $order,
+        string $provider = 'stub',
+        ?string $idempotencyKey = null,
+        string $source = 'retry',
+    ): PaymentTransaction {
+        if (! in_array($provider, PaymentTransaction::PROVIDERS, true)) {
+            throw new InvalidArgumentException('Unsupported payment provider.');
+        }
+
+        if ($idempotencyKey !== null) {
+            $idempotencyKey = trim($idempotencyKey) ?: null;
+        }
+
+        return DB::transaction(function () use ($order, $provider, $idempotencyKey, $source) {
+            if ($idempotencyKey !== null && Schema::hasColumn('payment_transactions', 'idempotency_key')) {
+                $byKey = PaymentTransaction::query()
+                    ->where('idempotency_key', $idempotencyKey)
+                    ->lockForUpdate()
+                    ->first();
+                if ($byKey) {
+                    if ((int) $byKey->order_id !== (int) $order->id) {
+                        throw new InvalidArgumentException('Idempotency key already used for another order.');
+                    }
+
+                    return $byKey;
+                }
+            }
+
+            /** @var Order $lockedOrder */
+            $lockedOrder = Order::query()->whereKey($order->id)->lockForUpdate()->firstOrFail();
+
+            $open = PaymentTransaction::query()
+                ->where('order_id', $lockedOrder->id)
+                ->whereIn('status', ['pending', 'initiated', 'processing', 'paid'])
+                ->exists();
+
+            if ($open) {
+                throw new InvalidArgumentException('An open or successful payment attempt already exists.');
+            }
+
+            return $this->insertAttempt($lockedOrder, $provider, $idempotencyKey, $source);
+        });
+    }
+
+    /**
+     * Record gateway initialization without requiring a status hop.
+     * Stamps initiated_at; optionally moves pending → initiated when safe.
+     */
+    public function markInitiated(PaymentTransaction $tx, ?User $actor = null, bool $transitionStatus = false): PaymentTransaction
+    {
+        if (Schema::hasColumn('payment_transactions', 'initiated_at') && ! $tx->initiated_at) {
+            $tx->initiated_at = now();
+            $tx->save();
+        }
+
+        if (! $transitionStatus) {
+            $this->audit->log(
+                action: 'PAYMENT_INITIATED',
+                actor: $actor,
+                resourceType: 'payment_transaction',
+                resourceId: $tx->id,
+                newValues: [
+                    'order_id' => $tx->order_id,
+                    'reference' => $tx->reference,
+                    'provider' => $tx->provider,
+                    'amount' => $this->normalizeMoney($tx->amount),
+                    'currency' => $tx->currency,
+                ],
+            );
+
+            return $tx->fresh();
+        }
+
+        $order = $tx->order ?? Order::query()->findOrFail($tx->order_id);
+        $current = $tx->status ?: 'pending';
+
+        if (in_array($current, ['initiated', 'processing', 'paid'], true)) {
+            return $tx->fresh();
+        }
+
+        if ($current !== 'pending') {
+            return $tx->fresh();
+        }
+
+        return $this->transitionOrderPayment(
+            $order,
+            'initiated',
+            $actor,
+            'Payment initiated with provider',
+            $tx->provider ?: 'stub',
+            $tx->provider_reference
+        );
+    }
+
+    /**
+     * Admin/foundation / verified-provider transition for an order's payment attempt.
      *
      * @throws InvalidArgumentException
      */
@@ -94,6 +210,7 @@ class PaymentService
         ?string $reason = null,
         string $provider = 'manual',
         ?string $providerReference = null,
+        ?string $failureCode = null,
     ): PaymentTransaction {
         $nextStatus = strtolower(trim($nextStatus));
 
@@ -117,11 +234,12 @@ class PaymentService
             throw new InvalidArgumentException('A reason is required for this payment change.');
         }
 
-        $result = DB::transaction(function () use ($order, $nextStatus, $actor, $reason, $provider, $providerReference) {
+        $result = DB::transaction(function () use (
+            $order, $nextStatus, $actor, $reason, $provider, $providerReference, $failureCode
+        ) {
             /** @var Order $lockedOrder */
             $lockedOrder = Order::query()->whereKey($order->id)->lockForUpdate()->firstOrFail();
 
-            // Idempotency: same provider reference already processed → return existing.
             if ($providerReference !== null) {
                 $byProviderRef = PaymentTransaction::query()
                     ->where('provider_reference', $providerReference)
@@ -140,8 +258,6 @@ class PaymentService
                 }
             }
 
-            // Use the latest transaction for this order (including terminal states).
-            // Do not silently create a new pending row to bypass failed/cancelled/refunded.
             $tx = PaymentTransaction::query()
                 ->where('order_id', $lockedOrder->id)
                 ->lockForUpdate()
@@ -153,26 +269,12 @@ class PaymentService
                     throw new InvalidArgumentException('Unsupported payment provider.');
                 }
 
-                $tx = new PaymentTransaction;
-                $tx->order_id = $lockedOrder->id;
-                $tx->reference = $this->generateReference();
-                $tx->provider = $provider;
-                $tx->amount = $this->authoritativeAmount($lockedOrder);
-                $tx->currency = 'TZS';
-                $tx->status = 'pending';
-                $tx->metadata = [
-                    'payment_method' => $lockedOrder->payment_method,
-                    'source' => 'admin',
-                ];
-                $tx->save();
-
+                $tx = $this->insertAttempt($lockedOrder, $provider, null, 'admin');
                 $tx = PaymentTransaction::query()->whereKey($tx->id)->lockForUpdate()->firstOrFail();
             }
 
             $current = $tx->status ?: 'pending';
 
-            // Already paid: same provider reference (or no new ref) → idempotent no-op.
-            // Different provider reference → reject (never silent).
             if ($current === 'paid' && $nextStatus === 'paid') {
                 $storedRef = $tx->provider_reference;
 
@@ -183,6 +285,9 @@ class PaymentService
                         );
                     }
                 }
+
+                // Idempotent success: ensure inventory committed once.
+                $this->inventorySettlement->commitForPaidOrder($lockedOrder, $actor);
 
                 return ['tx' => $tx, 'changed' => false, 'event' => null];
             }
@@ -200,7 +305,8 @@ class PaymentService
 
             $this->assertAmountMatchesOrder($tx, $lockedOrder);
 
-            if ($tx->currency !== 'TZS') {
+            $currency = $lockedOrder->currency ?: config('payments.currency', 'TZS');
+            if ($tx->currency !== $currency) {
                 throw new InvalidArgumentException('Currency mismatch.');
             }
 
@@ -222,12 +328,33 @@ class PaymentService
             }
 
             $tx->status = $nextStatus;
+
+            if ($nextStatus === 'initiated' && Schema::hasColumn('payment_transactions', 'initiated_at')) {
+                $tx->initiated_at = $tx->initiated_at ?: now();
+            }
+
             if ($nextStatus === 'paid') {
                 $tx->paid_at = now();
+                if (Schema::hasColumn('payment_transactions', 'completed_at')) {
+                    $tx->completed_at = now();
+                }
             }
+
+            if (in_array($nextStatus, ['failed', 'cancelled', 'expired'], true)) {
+                if (Schema::hasColumn('payment_transactions', 'completed_at')) {
+                    $tx->completed_at = now();
+                }
+                if ($failureCode && Schema::hasColumn('payment_transactions', 'failure_code')) {
+                    $tx->failure_code = Str::limit($failureCode, 64, '');
+                }
+                if ($reason && Schema::hasColumn('payment_transactions', 'failure_reason')) {
+                    $tx->failure_reason = Str::limit($reason, 500, '');
+                }
+            }
+
             $tx->save();
 
-            $lockedOrder->payment_status = $nextStatus;
+            $lockedOrder->payment_status = $nextStatus === 'initiated' ? 'pending' : $nextStatus;
             // Soft-sync marketplace order lifecycle when first paid.
             if ($nextStatus === 'paid' && in_array(($lockedOrder->status ?: 'pending'), ['pending', 'paid'], true)) {
                 $lockedOrder->status = 'confirmed';
@@ -249,6 +376,49 @@ class PaymentService
                 ],
             ]);
 
+            if ($nextStatus === 'paid') {
+                $this->inventorySettlement->commitForPaidOrder($lockedOrder, $actor);
+            }
+
+            if (in_array($nextStatus, ['failed', 'cancelled', 'expired'], true)) {
+                $this->inventorySettlement->releaseForUnpaidOrder(
+                    $lockedOrder,
+                    $actor,
+                    "Payment {$nextStatus} — reservation released"
+                );
+            }
+
+            $auditAction = match ($nextStatus) {
+                'initiated' => 'PAYMENT_INITIATED',
+                'processing' => 'PAYMENT_PROCESSING',
+                'paid' => 'PAYMENT_SUCCEEDED',
+                'failed' => 'PAYMENT_FAILED',
+                'cancelled' => 'PAYMENT_CANCELLED',
+                'expired' => 'PAYMENT_EXPIRED',
+                'refunded' => 'PAYMENT_REFUNDED',
+                'partially_refunded' => 'PAYMENT_PARTIALLY_REFUNDED',
+                default => 'PAYMENT_STATUS_CHANGED',
+            };
+
+            $this->audit->log(
+                action: $auditAction,
+                actor: $actor,
+                resourceType: 'payment_transaction',
+                resourceId: $tx->id,
+                oldValues: ['status' => $current],
+                newValues: [
+                    'status' => $nextStatus,
+                    'order_id' => $lockedOrder->id,
+                    'amount' => $this->normalizeMoney($tx->amount),
+                    'currency' => $tx->currency,
+                    'provider' => $tx->provider,
+                    'reference' => $tx->reference,
+                    'provider_reference' => $tx->provider_reference,
+                ],
+                reason: $reason,
+                category: 'business',
+            );
+
             $event = match ($nextStatus) {
                 'paid' => 'successful',
                 'failed' => 'failed',
@@ -259,7 +429,6 @@ class PaymentService
             return ['tx' => $tx->fresh(['order']), 'changed' => true, 'event' => $event];
         });
 
-        // Events only after successful commit.
         if ($result['changed'] && $result['event']) {
             $tx = $result['tx'];
             match ($result['event']) {
@@ -274,7 +443,7 @@ class PaymentService
     }
 
     /**
-     * Process a stub/manual callback-style update keyed by provider reference (idempotent).
+     * Process a verified provider callback-style update (idempotent).
      */
     public function processProviderResult(
         Order $order,
@@ -308,12 +477,9 @@ class PaymentService
 
     public function reasonRequired(string $toStatus): bool
     {
-        return in_array($toStatus, ['failed', 'cancelled'], true);
+        return in_array($toStatus, ['failed', 'cancelled', 'expired'], true);
     }
 
-    /**
-     * Authoritative order amount as a 2-decimal money string (no float math).
-     */
     public function authoritativeAmount(Order $order): string
     {
         $raw = $order->getAttributes()['total_price'] ?? $order->total_price;
@@ -321,9 +487,6 @@ class PaymentService
         return $this->normalizeMoney($raw);
     }
 
-    /**
-     * Normalize a decimal/money value to scale-2 string without binary floats.
-     */
     public function normalizeMoney(mixed $value): string
     {
         if ($value === null || $value === '') {
@@ -337,6 +500,105 @@ class PaymentService
         }
 
         return bcadd($string, '0', 2);
+    }
+
+    protected function insertAttempt(
+        Order $lockedOrder,
+        string $provider,
+        ?string $idempotencyKey,
+        string $source,
+    ): PaymentTransaction {
+        $attempt = 1;
+        if (Schema::hasColumn('payment_transactions', 'attempt_number')) {
+            $attempt = (int) PaymentTransaction::query()
+                ->where('order_id', $lockedOrder->id)
+                ->max('attempt_number') + 1;
+        }
+
+        $amount = $this->authoritativeAmount($lockedOrder);
+        $currency = $lockedOrder->currency ?: config('payments.currency', 'TZS');
+
+        // Retry after failed/expired payment: re-reserve stock if previously released.
+        $invState = $lockedOrder->inventory_state ?? null;
+        if (in_array($invState, [OrderInventorySettlement::STATE_RELEASED, OrderInventorySettlement::STATE_NONE], true)
+            && $attempt > 1) {
+            $this->rereserveOrderItems($lockedOrder);
+        }
+
+        $tx = new PaymentTransaction;
+        $tx->order_id = $lockedOrder->id;
+        $tx->reference = $this->generateReference();
+        $tx->provider = $provider;
+        $tx->amount = $amount;
+        $tx->currency = $currency;
+        $tx->status = 'pending';
+        $tx->provider_reference = null;
+        $tx->metadata = [
+            'payment_method' => $lockedOrder->payment_method,
+            'source' => $source,
+        ];
+
+        if (Schema::hasColumn('payment_transactions', 'attempt_number')) {
+            $tx->attempt_number = max(1, $attempt);
+        }
+        if ($idempotencyKey && Schema::hasColumn('payment_transactions', 'idempotency_key')) {
+            $tx->idempotency_key = $idempotencyKey;
+        }
+        if (Schema::hasColumn('payment_transactions', 'refunded_amount')) {
+            $tx->refunded_amount = '0.00';
+        }
+
+        $tx->save();
+
+        if (! in_array(($lockedOrder->payment_status ?: 'pending'), ['pending', 'initiated'], true)) {
+            // Keep failed/cancelled history on order until a new attempt progresses.
+            if (! in_array($lockedOrder->payment_status, ['paid', 'partially_refunded', 'refunded'], true)) {
+                $lockedOrder->payment_status = 'pending';
+                $lockedOrder->save();
+            }
+        }
+
+        $this->audit->log(
+            action: 'PAYMENT_ATTEMPT_CREATED',
+            actor: null,
+            resourceType: 'payment_transaction',
+            resourceId: $tx->id,
+            newValues: [
+                'order_id' => $lockedOrder->id,
+                'attempt_number' => $tx->attempt_number ?? 1,
+                'amount' => $amount,
+                'currency' => $currency,
+                'provider' => $provider,
+                'reference' => $tx->reference,
+            ],
+        );
+
+        return $tx->fresh();
+    }
+
+    /**
+     * Re-reserve line items when starting a new payment attempt after release.
+     */
+    protected function rereserveOrderItems(Order $order): void
+    {
+        $order->loadMissing('items.product');
+        $actor = null;
+        foreach ($order->items as $item) {
+            if (! $item->product) {
+                continue;
+            }
+            $qty = (int) $item->quantity;
+            if ($qty < 1) {
+                continue;
+            }
+            app(\App\Services\Catalog\InventoryService::class)->reserve(
+                $item->product->fresh(),
+                $qty,
+                $actor,
+                (string) $order->id,
+            );
+        }
+        $this->inventorySettlement->markReserved($order->fresh());
     }
 
     protected function assertAmountMatchesOrder(PaymentTransaction $tx, Order $order): void

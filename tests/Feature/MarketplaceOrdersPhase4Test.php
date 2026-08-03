@@ -204,9 +204,11 @@ class MarketplaceOrdersPhase4Test extends TestCase
         $this->assertTrue(
             InventoryMovement::query()->where('product_id', $productA->id)->where('type', 'reserve')->exists()
         );
-        $this->assertTrue(
+        // Sale commit happens after verified payment (Phase 5), not at checkout.
+        $this->assertFalse(
             InventoryMovement::query()->where('product_id', $productA->id)->where('type', 'sale')->exists()
         );
+        $this->assertSame('reserved', $order->fresh()->inventory_state);
         $this->assertTrue(
             AuditLog::query()->where('action', 'ORDER_CREATED')->where('resource_id', $order->id)->exists()
         );

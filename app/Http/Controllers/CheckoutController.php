@@ -250,6 +250,7 @@ class CheckoutController extends Controller
             $this->paymentProviderForOrder($order)
         );
         $paymentInit = $gateways->initialize($order, $transaction);
+        $payments->markInitiated($transaction->fresh());
 
         OrderPlaced::dispatch($order->load('items.product.vendor.user'));
 

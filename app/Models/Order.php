@@ -19,10 +19,12 @@ class Order extends Model
 {
     public const PAYMENT_STATUSES = [
         'pending',
+        'initiated',
         'processing',
         'paid',
         'failed',
         'cancelled',
+        'expired',
         'refunded',
         'partially_refunded',
     ];

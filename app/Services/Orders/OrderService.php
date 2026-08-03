@@ -93,22 +93,19 @@ class OrderService
                     vendorStoreName: $vendor?->store_name,
                 );
 
-                // Transitional reservation: reserve then immediately commit sale in the
-                // same transaction (customer-visible parity with prior decrement path,
-                // plus inventory movement audit). Split to payment-paid in Finance phase.
+                // Phase 5: reserve at checkout; commit only after verified payment.
                 $this->inventory->reserve(
                     $product,
                     $line['quantity'],
                     $customer,
                     (string) $order->id,
                 );
-                $this->inventory->commitSaleFromReserved(
-                    $product->fresh(),
-                    $line['quantity'],
-                    $customer,
-                    (string) $order->id,
-                );
-                $product->increment('sold_count', $line['quantity']);
+            }
+
+            if (\Illuminate\Support\Facades\Schema::hasColumn('orders', 'inventory_state')) {
+                $order->forceFill([
+                    'inventory_state' => \App\Services\Payments\OrderInventorySettlement::STATE_RESERVED,
+                ])->save();
             }
 
             $this->checkoutIds->markConsumed($idempotencyKey, (int) $order->id);
@@ -149,23 +146,8 @@ class OrderService
                 $reason ?? 'Order cancelled'
             );
 
-            // Restock committed sale inventory (Phase 4 transitional reserve+commit).
-            $cancelled->loadMissing('items.product');
-            foreach ($cancelled->items as $item) {
-                if (! $item->product) {
-                    continue;
-                }
-                $this->inventory->adjust(
-                    $item->product,
-                    (int) $item->quantity,
-                    'Order cancelled — stock restored',
-                    $actor,
-                    \App\Models\InventoryMovement::TYPE_RETURN,
-                    'order',
-                    (string) $cancelled->id,
-                );
-                $item->product->decrement('sold_count', min((int) $item->product->sold_count, (int) $item->quantity));
-            }
+            app(\App\Services\Payments\OrderInventorySettlement::class)
+                ->restockCommittedOrder($cancelled, $actor);
 
             return $cancelled->fresh(['items']);
         });
