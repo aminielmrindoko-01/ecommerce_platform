@@ -58,15 +58,60 @@ class SuperAdminRoleAssignmentFixTest extends TestCase
             '--force' => true,
         ])->assertSuccessful();
 
-        $this->assertTrue($keep->fresh()->isSuperAdmin());
-        $this->assertFalse($other->fresh()->isSuperAdmin());
-        $this->assertContains('admin', $other->fresh()->roleNames());
-        $this->assertSame('admin', $other->fresh()->role);
+        $keep = $keep->fresh();
+        $other = $other->fresh();
+
+        $this->assertTrue($keep->isSuperAdmin());
+        $this->assertSame(['super_admin'], $keep->roleNames());
+        $this->assertFalse($other->isSuperAdmin());
+        $this->assertSame(['admin'], $other->roleNames());
+        $this->assertSame('admin', $other->role);
 
         $this->assertSame(
             1,
             User::query()->whereHas('roles', fn ($q) => $q->where('name', 'super_admin'))->count()
         );
+        $this->assertSame(
+            'admin@gmail.com',
+            User::query()->whereHas('roles', fn ($q) => $q->where('name', 'super_admin'))->value('email')
+        );
+    }
+
+    public function test_reconcile_command_requires_force_flag(): void
+    {
+        $this->assign(User::factory()->create(['email' => 'admin@gmail.com']), 'super_admin', 'admin');
+        $this->assign(User::factory()->create(['email' => 'admin2@example.com']), 'super_admin', 'admin');
+
+        $this->artisan('admin:reconcile-super-admins', [
+            '--keep' => 'admin@gmail.com',
+        ])
+            ->expectsOutputToContain('--force')
+            ->assertFailed();
+
+        $this->assertSame(
+            2,
+            User::query()->whereHas('roles', fn ($q) => $q->where('name', 'super_admin'))->count()
+        );
+    }
+
+    public function test_reconcile_command_fails_safely_when_keep_is_invalid(): void
+    {
+        $this->assign(User::factory()->create(['email' => 'admin@gmail.com']), 'super_admin', 'admin');
+        $this->assign(User::factory()->create(['email' => 'admin2@example.com']), 'super_admin', 'admin');
+
+        $this->artisan('admin:reconcile-super-admins', [
+            '--keep' => 'missing@example.com',
+            '--force' => true,
+        ])
+            ->expectsOutputToContain('was not found')
+            ->assertFailed();
+
+        $this->assertSame(
+            2,
+            User::query()->whereHas('roles', fn ($q) => $q->where('name', 'super_admin'))->count()
+        );
+        $this->assertTrue(User::query()->where('email', 'admin@gmail.com')->first()->isSuperAdmin());
+        $this->assertTrue(User::query()->where('email', 'admin2@example.com')->first()->isSuperAdmin());
     }
 
     public function test_normal_admin_cannot_assign_super_admin(): void
