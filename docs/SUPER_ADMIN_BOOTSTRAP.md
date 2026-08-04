@@ -99,6 +99,17 @@ If no trusted user exists, an authorized engineer may temporarily run a **one-of
 
 ## Dev seeders vs bootstrap
 
-`DatabaseSeeder` may create demo users (e.g. `admin@example.com`) for **local demos only**. That is not the production bootstrap path.
+Local/dev demo Super Admin (does **not** wipe catalog data):
 
-Production / staging first admin: **`php artisan admin:create-super-admin` only**.
+```bash
+php artisan db:seed --class=DemoSuperAdminSeeder
+```
+
+- Email: `admin@market.com`
+- Password: `password123` (dev only)
+- Assigns RBAC `super_admin` via `user_roles`
+- Password hashed by the User model cast
+
+Avoid full `php artisan db:seed` on databases with data you must keep: `MarketplaceSeeder` clears catalog demo rows.
+
+Production / staging first admin: **`php artisan admin:create-super-admin` only** (not demo seed credentials).

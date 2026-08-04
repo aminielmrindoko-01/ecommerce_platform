@@ -8,7 +8,16 @@ use Illuminate\Database\Seeder;
 /**
  * Seeds demo admin/customer/vendor accounts, then marketplace catalog data.
  *
- * Default password for all demo users: `password` (local/dev only).
+ * Local/dev only.
+ *
+ * Super Admin demo (also available alone via DemoSuperAdminSeeder):
+ *   admin@market.com / password123
+ *
+ * Other demo users default password: password
+ *
+ * WARNING: MarketplaceSeeder clears catalog demo rows (products/vendors/…).
+ * Prefer `php artisan db:seed --class=DemoSuperAdminSeeder` on databases
+ * that already contain data you must keep.
  *
  * @package Database\Seeders
  */
@@ -19,14 +28,8 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        User::updateOrCreate(
-            ['email' => 'admin@example.com'],
-            [
-                'name' => 'Admin User',
-                'password' => 'password',
-                'phone' => '+255700000001',
-            ]
-        )->forceFill(['role' => 'admin', 'is_active' => true])->save();
+        // Safe Super Admin upsert + RBAC assignment (does not wipe catalog).
+        $this->call(DemoSuperAdminSeeder::class);
 
         User::updateOrCreate(
             ['email' => 'test@example.com'],
