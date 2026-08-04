@@ -320,6 +320,14 @@ When **no** RBAC `super_admin` exists yet:
 php artisan admin:create-super-admin
 ```
 
+Local/dev demo Super Admin only (safe; does not wipe catalog):
+
+```bash
+php artisan db:seed --class=DemoSuperAdminSeeder
+```
+
+→ `admin@market.com` / `password123` with RBAC `super_admin`.
+
 - Creates the first Super Admin through `SuperAdminBootstrapService` + `RoleAssignmentService::bootstrapFirstSuperAdmin`
 - Passwords are interactive/hidden (never CLI args); hashed via the User model cast
 - Locked after the first Super Admin exists (checks `user_roles` → `roles`, not `users.role`)
