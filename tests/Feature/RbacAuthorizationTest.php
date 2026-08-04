@@ -220,12 +220,12 @@ class RbacAuthorizationTest extends TestCase
 
     public function test_legacy_admin_factory_still_accesses_dashboard_without_explicit_seed_roles_on_user(): void
     {
-        // Fresh admin with only legacy role — bridge must grant admin.access.
+        // Fresh admin with only legacy role — bridge maps to RBAC admin (not super_admin).
         $admin = User::factory()->admin()->create();
-        // Detach any auto roles if present.
         $admin->roles()->detach();
 
         $this->assertTrue($admin->hasPermission('admin.access'));
+        $this->assertFalse($admin->isSuperAdmin());
         $this->actingAs($admin)->get('/admin')->assertOk();
     }
 

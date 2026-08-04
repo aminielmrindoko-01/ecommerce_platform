@@ -53,7 +53,14 @@ class DemoSuperAdminSeeder extends Seeder
                 'email_verified_at' => $user->email_verified_at ?: now(),
             ])->save();
 
-            $role = Role::query()->where('name', 'super_admin')->firstOrFail();
+            $existingOtherSa = User::query()
+                ->whereHas('roles', fn ($q) => $q->where('name', 'super_admin'))
+                ->where('email', '!=', self::EMAIL)
+                ->exists();
+
+            // Never create a second Super Admin when one already exists.
+            $roleName = $existingOtherSa ? 'admin' : 'super_admin';
+            $role = Role::query()->where('name', $roleName)->firstOrFail();
             $user->roles()->sync([$role->id]);
             app(PermissionResolver::class)->forget($user->fresh());
         });

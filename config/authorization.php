@@ -273,7 +273,10 @@ return [
     |
     */
     'legacy_role_map' => [
-        'admin' => 'super_admin',
+        // Marketplace identity → default RBAC role when user_roles is empty.
+        // IMPORTANT: legacy `admin` maps to RBAC `admin`, NOT `super_admin`.
+        // Super Admin must be assigned explicitly (bootstrap / RoleAssignmentService).
+        'admin' => 'admin',
         'vendor' => 'vendor',
         'customer' => 'customer',
     ],

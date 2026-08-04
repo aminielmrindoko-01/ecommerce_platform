@@ -326,7 +326,29 @@ Local/dev demo Super Admin only (safe; does not wipe catalog):
 php artisan db:seed --class=DemoSuperAdminSeeder
 ```
 
-→ `admin@market.com` / `password123` with RBAC `super_admin`.
+→ `admin@market.com` / `password123` with RBAC `super_admin` **only if no other Super Admin exists**.
+
+### Super Admin reconciliation
+
+If multiple Super Admins exist (often caused by the old legacy `admin` → `super_admin` bridge), keep one and demote the rest:
+
+```bash
+php artisan admin:reconcile-super-admins --keep=admin@gmail.com --force
+```
+
+Uses `RoleAssignmentService` (no pivot hacks). Bootstrap create remains locked afterward.
+
+### Legacy role bridge
+
+`users.role` is marketplace identity only. When `user_roles` is empty, `legacy_role_map` attaches:
+
+| Legacy `users.role` | RBAC role |
+|---------------------|-----------|
+| `admin` | `admin` (not `super_admin`) |
+| `vendor` | `vendor` |
+| `customer` | `customer` |
+
+Super Admin must be assigned explicitly.
 
 - Creates the first Super Admin through `SuperAdminBootstrapService` + `RoleAssignmentService::bootstrapFirstSuperAdmin`
 - Passwords are interactive/hidden (never CLI args); hashed via the User model cast
