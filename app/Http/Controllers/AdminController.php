@@ -151,18 +151,26 @@ class AdminController extends Controller
             return back()->with('error', 'You cannot change your own role.');
         }
 
+        $assignable = Role::query()->orderBy('name')->pluck('name')->all();
+
         $validated = $request->validate([
             'role' => 'required|in:admin,vendor,customer',
-            'rbac_role' => 'nullable|string|max:64',
+            'rbac_role' => ['nullable', 'string', 'max:64', 'in:'.implode(',', $assignable)],
         ]);
 
         try {
             $rbacRole = $validated['rbac_role'] ?? null;
             if (! $rbacRole) {
-                $rbacRole = (string) (config('authorization.legacy_role_map.'.$validated['role']) ?? 'customer');
+                // Assignment fallback for marketplace identity — never auto-promote to super_admin.
+                // (legacy_role_map used to map admin→super_admin; that caused duplicate Super Admins.)
+                $rbacRole = match ($validated['role']) {
+                    'admin' => 'admin',
+                    'vendor' => 'vendor',
+                    default => 'customer',
+                };
             }
 
-            // Ordinary admins cannot assign super_admin via free-text.
+            // Ordinary admins cannot assign super_admin via free-text / forged requests.
             if ($rbacRole === 'super_admin' && ! auth()->user()?->isSuperAdmin()) {
                 return back()->with('error', 'Only a Super Admin can assign the Super Admin role.');
             }

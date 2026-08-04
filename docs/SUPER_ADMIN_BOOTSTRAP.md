@@ -97,6 +97,26 @@ If no trusted user exists, an authorized engineer may temporarily run a **one-of
 
 ---
 
+## Multiple Super Admins
+
+If more than one user holds RBAC `super_admin` (for example after the old
+legacy `users.role=admin` → `super_admin` bridge):
+
+```bash
+php artisan admin:reconcile-super-admins --keep=admin@gmail.com --force
+```
+
+`--force` is **required**. Without it the command refuses to change roles.
+
+This keeps the listed account as the only Super Admin (RBAC role
+`super_admin` only) and demotes other Super Admins to RBAC `admin` through
+`RoleAssignmentService`. It never deletes users, roles, or permissions.
+
+This command ships on the RBAC Super Admin fix branch/PR — it is **not** on
+older `main` checkouts that only have `admin:create-super-admin`.
+
+---
+
 ## Dev seeders vs bootstrap
 
 Local/dev demo Super Admin (does **not** wipe catalog data):

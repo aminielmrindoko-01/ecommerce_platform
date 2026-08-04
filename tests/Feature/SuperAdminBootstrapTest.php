@@ -57,6 +57,18 @@ class SuperAdminBootstrapTest extends TestCase
         $this->assertFalse($user->fresh()->hasPermission('permissions.assign'));
     }
 
+    public function test_legacy_admin_identity_does_not_auto_grant_super_admin(): void
+    {
+        $user = User::factory()->admin()->create();
+        $user->roles()->detach();
+        app(PermissionResolver::class)->forget($user->fresh());
+
+        // Materialize via permission resolve (bridge attaches RBAC admin, not super_admin).
+        $this->assertTrue($user->fresh()->hasPermission('admin.access'));
+        $this->assertFalse($user->fresh()->isSuperAdmin());
+        $this->assertContains('admin', $user->fresh()->roleNames());
+    }
+
     public function test_duplicate_bootstrap_is_denied(): void
     {
         $svc = app(SuperAdminBootstrapService::class);
